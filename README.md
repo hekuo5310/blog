@@ -140,7 +140,7 @@ wrangler.toml           Workers 配置
 访问 [giscus.app](https://giscus.app/zh-CN)，依次填写仓库和 Discussion 分类。仓库应填写为 `用户名/仓库名`，例如：
 
 ```text
-ZerexaNet/blog
+hekuo5310/blog
 ```
 
 在页面底部生成配置后，记录以下三个值：

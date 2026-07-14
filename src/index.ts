@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
-import { postList, postDetail, loginPage, userLoginPage, registerPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, DEFAULT_CONFIG } from './html'
-import type { SiteConfig } from './html'
+import type { Context } from 'hono'
+import { postList, postDetail, loginPage, userLoginPage, registerPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, DEFAULT_CONFIG } from './html'
+import type { GiscusConfig, SiteConfig } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish } from './pages'
 import { createSession, validateSession, deleteSession, sessionCookie, clearCookie } from './auth'
 import { hashPassword, createUserSession, getUserFromSession, deleteUserSession, userSessionCookie, clearUserCookie } from './user-auth'
@@ -9,13 +10,28 @@ import { getComments, addComment, deleteComment } from './comments'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries } from './ai-summary'
 
-export type Env = { DB: D1Database; SESSIONS: KVNamespace; IMAGES: R2Bucket; ADMIN_USER: string; ADMIN_PASS: string; OPENAI_API_KEY: string; OPENAI_BASE_URL?: string; OPENAI_MODEL?: string }
+export type Env = {
+  DB: D1Database
+  SESSIONS: KVNamespace
+  IMAGES: R2Bucket
+  ADMIN_USER: string
+  ADMIN_PASS: string
+  OPENAI_API_KEY: string
+  OPENAI_BASE_URL?: string
+  OPENAI_MODEL?: string
+  GISCUS_REPO?: string
+  GISCUS_REPO_ID?: string
+  GISCUS_CATEGORY?: string
+  GISCUS_CATEGORY_ID?: string
+  GISCUS_MAPPING?: string
+  GISCUS_LANG?: string
+}
 
 type User = { id: number; username: string }
 
 const app = new Hono<{ Bindings: Env }>()
 
-async function getLoggedInUser(c: any): Promise<User | null> {
+async function getLoggedInUser(c: Context<{ Bindings: Env }>): Promise<User | null> {
   const userId = await getUserFromSession(c)
   if (!userId) return null
   return c.env.DB.prepare('SELECT id,username FROM users WHERE id=?').bind(userId).first<User>()
@@ -25,6 +41,22 @@ async function getConfig(env: Env): Promise<SiteConfig> {
   const raw = await env.SESSIONS.get('site:config')
   if (!raw) return DEFAULT_CONFIG
   try { return JSON.parse(raw) } catch { return DEFAULT_CONFIG }
+}
+
+function getGiscusConfig(env: Env): GiscusConfig | null {
+  if (!env.GISCUS_REPO_ID || !env.GISCUS_CATEGORY || !env.GISCUS_CATEGORY_ID) return null
+  return {
+    repo: env.GISCUS_REPO || 'ZerexaNet/blog',
+    repoId: env.GISCUS_REPO_ID,
+    category: env.GISCUS_CATEGORY,
+    categoryId: env.GISCUS_CATEGORY_ID,
+    mapping: env.GISCUS_MAPPING || 'pathname',
+    strict: '0',
+    reactionsEnabled: '1',
+    emitMetadata: '0',
+    inputPosition: 'bottom',
+    lang: env.GISCUS_LANG || 'zh-CN'
+  }
 }
 
 app.use('/admin/*', async (c, next) => {
@@ -50,7 +82,17 @@ app.get('/post/:slug', async (c) => {
   const post = await getPostBySlug(c, c.req.param('slug'))
   if (!post) return c.notFound()
   const [comments, user, cfg] = await Promise.all([getComments(c, post.id), getLoggedInUser(c), getConfig(c.env)])
-  return c.html(postDetail(post, comments, user?.username ?? null, cfg))
+  return c.html(postDetail(post, comments, user?.username ?? null, cfg, getGiscusConfig(c.env)))
+})
+
+app.get('/terms', async (c) => {
+  const [user, cfg] = await Promise.all([getLoggedInUser(c), getConfig(c.env)])
+  return c.html(termsPage(cfg, user?.username))
+})
+
+app.get('/privacy', async (c) => {
+  const [user, cfg] = await Promise.all([getLoggedInUser(c), getConfig(c.env)])
+  return c.html(privacyPage(cfg, user?.username))
 })
 
 app.post('/post/:slug/comment', async (c) => {

@@ -4,7 +4,7 @@ import type { Post } from './html'
 import { pinyin } from 'pinyin-pro'
 
 function toSlug(title: string): string {
-  const py = pinyin(title, { toneType: 'none', type: 'array', separator: '' }).join('')
+  const py = pinyin(title, { toneType: 'none', type: 'array' }).join('')
   return py
     .trim()
     .toLowerCase()

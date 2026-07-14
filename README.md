@@ -126,3 +126,78 @@ migrations/
   0004_ai_summary.sql   posts 增加 ai_summary 列
 wrangler.toml           Workers 配置
 ```
+
+## Giscus 评论配置
+
+本站文章评论使用 Giscus，评论内容会存储在 GitHub Discussions 中。配置前请准备一个公开的 GitHub 仓库，并在仓库的 `Settings -> Features` 中开启 `Discussions`。
+
+### 1. 安装 Giscus App
+
+打开 [github.com/apps/giscus](https://github.com/apps/giscus)，将 Giscus 安装到存放评论的仓库。建议只授权这个博客仓库，减少不必要的权限。
+
+### 2. 获取 Giscus 配置值
+
+访问 [giscus.app](https://giscus.app/zh-CN)，依次填写仓库和 Discussion 分类。仓库应填写为 `用户名/仓库名`，例如：
+
+```text
+ZerexaNet/blog
+```
+
+在页面底部生成配置后，记录以下三个值：
+
+- `data-repo-id` 对应 `GISCUS_REPO_ID`
+- `data-category` 对应 `GISCUS_CATEGORY`
+- `data-category-id` 对应 `GISCUS_CATEGORY_ID`
+
+本项目默认使用 `pathname` 将文章 URL 映射到 Discussion，也就是每篇文章对应一个独立的讨论。需要使用其他映射方式时，可设置 `GISCUS_MAPPING`。
+
+### 3. 配置 Cloudflare Workers
+
+将下面的变量加入 `wrangler.toml` 的 `[vars]` 部分。ID 必须使用 Giscus 页面生成的真实值，不要保留示例值：
+
+```toml
+[vars]
+GISCUS_REPO = "用户名/仓库名"
+GISCUS_REPO_ID = "R_kgDOxxxxxxxx"
+GISCUS_CATEGORY = "Announcements"
+GISCUS_CATEGORY_ID = "DIC_kwDOxxxxxxxx"
+GISCUS_MAPPING = "pathname"
+GISCUS_LANG = "zh-CN"
+```
+
+也可以在部署时通过命令行设置变量：
+
+```bash
+wrangler secret put GISCUS_REPO_ID
+wrangler secret put GISCUS_CATEGORY
+wrangler secret put GISCUS_CATEGORY_ID
+```
+
+这三个值本身不是密码，使用 `[vars]` 配置更直观；如果不希望它们出现在配置文件中，也可以使用上面的 secret 命令。`GISCUS_REPO`、`GISCUS_MAPPING` 和 `GISCUS_LANG` 为可选项，默认值分别是 `ZerexaNet/blog`、`pathname` 和 `zh-CN`。
+
+### 4. 本地开发配置
+
+在项目根目录的 `.dev.vars` 中加入本地测试所需的值：
+
+```text
+GISCUS_REPO=用户名/仓库名
+GISCUS_REPO_ID=R_kgDOxxxxxxxx
+GISCUS_CATEGORY=Announcements
+GISCUS_CATEGORY_ID=DIC_kwDOxxxxxxxx
+GISCUS_MAPPING=pathname
+GISCUS_LANG=zh-CN
+```
+
+然后启动开发服务器：
+
+```bash
+npm run dev
+```
+
+打开任意公开文章，在文章底部看到 Giscus 评论框即表示配置成功。未配置 `GISCUS_REPO_ID`、`GISCUS_CATEGORY` 或 `GISCUS_CATEGORY_ID` 时，页面会显示配置提示，不会加载评论框。
+
+### 常见问题
+
+- 评论框显示 `Discussion not found`：检查仓库是否公开、是否开启 Discussions、Giscus App 是否已安装，并重新复制三个 ID。
+- 登录后无法评论：Giscus 使用 GitHub 登录，需确认当前账号对仓库有发表评论的权限。
+- 每篇文章没有独立评论：确认 `GISCUS_MAPPING` 为 `pathname`，并确保文章 URL 稳定。

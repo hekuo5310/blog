@@ -1,6 +1,7 @@
 export type Post = { id: number; title: string; slug: string; body: string; published: number; created_at: string; ai_summary?: string | null }
 export type Comment = { id: number; post_id: number; author: string; body: string; created_at: string; user_id: number | null }
 export type SiteConfig = { title: string; desc: string; navLinks: { label: string; url: string }[] }
+export type GiscusConfig = { repo: string; repoId: string; category: string; categoryId: string; mapping: string; strict: string; reactionsEnabled: string; emitMetadata: string; inputPosition: string; lang: string }
 type UpdateItem = { title: string; url: string; createdAt: string }
 export const DEFAULT_CONFIG: SiteConfig = { title: 'Blog', desc: '欢迎来到我的个人博客！这里记录着我的想法、学习和生活。', navLinks: [] }
 
@@ -136,6 +137,15 @@ a:hover{opacity:.7}
 .article-body blockquote{border-left:3px solid var(--input-border);padding-left:1rem;color:var(--muted);margin:.75rem 0}
 .article-body ul,.article-body ol{padding-left:1.5rem;margin:.75rem 0}
 .article-body img{max-width:100%;border-radius:6px}
+.footnotes{margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border);font-size:.9rem;color:var(--muted)}
+.footnotes ol{padding-left:1.3rem}
+.footnotes li{margin:.4rem 0}
+.footnotes p{display:inline}
+.footnote-ref{font-size:.75em;vertical-align:super;line-height:0}
+.footnote-backref{margin-left:.35rem;color:var(--accent)}
+.spoiler{display:inline;cursor:pointer;border-radius:3px;filter:blur(5px);transition:filter .15s ease,background-color .15s ease;background:color-mix(in srgb,var(--text) 14%,transparent)}
+.spoiler.revealed{filter:none;background:transparent}
+.spoiler:focus{outline:1px solid var(--accent);outline-offset:2px}
 .ai-summary-block{margin:1rem 0}
 .ai-summary-box{margin-top:1rem;padding:.9rem 1.1rem;border:1px solid var(--input-border);border-left:3px solid var(--accent);border-radius:6px;background:var(--bg-soft)}
 .ai-summary-label{display:inline-block;font-size:.78rem;font-weight:600;color:var(--accent);margin-bottom:.4rem;letter-spacing:.03em}
@@ -144,6 +154,9 @@ a:hover{opacity:.7}
 /* comments */
 .comments{margin-top:3rem;border-top:1px solid var(--border);padding-top:2rem}
 .comments h2{font-size:1.1rem;font-weight:600;margin-bottom:1.5rem}
+.comments>h2:first-child{display:none}
+.comments .giscus-title{display:block}
+.giscus-frame{width:100%}
 .comment{padding:.75rem 0;border-bottom:1px solid var(--border-soft)}
 .comment-author{font-weight:600;font-size:.9rem}
 .comment-date{color:var(--faint);font-size:.8rem;margin-left:.5rem}
@@ -230,6 +243,7 @@ ${body}
 </div>
 <footer class="site-footer">
 <script>document.write('© 2026' + (new Date().getFullYear()>2026 ? '~'+new Date().getFullYear() : '') + ' hekuo')</script>
+<div style="margin-top:.5rem;display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap"><a href="/terms">用户协议</a><a href="/privacy">隐私协议</a></div>
 </footer>
 <script id="update-data" type="application/json">${updateJson.replace(/</g, '\\u003c')}</script>
 <script>
@@ -349,6 +363,40 @@ function excerpt(md: string, len = 120): string {
   return md.replace(/[#*`_\[\]]/g, '').slice(0, len).trim() + (md.length > len ? '…' : '')
 }
 
+const MARKDOWN_SCRIPT = `<script>
+(function(){
+  if(window.renderMarkdown)return;
+  function escAttr(s){return String(s).replace(/[^a-zA-Z0-9_-]/g,'-');}
+  window.renderMarkdown=function(md){
+    var notes=[];
+    var spoilers=[];
+    var text=String(md||'').replace(/\\[spoiler\\]([\\s\\S]*?)\\[\\/spoiler\\]/gi,function(_,body){
+      var index=spoilers.length;
+      spoilers.push(body);
+      return '@@SPOILER_'+index+'@@';
+    });
+    text=text.replace(/\\^\\[([^\\]]+)\\]/g,function(_,body){
+      notes.push(body);
+      var number=notes.length;
+      var refId='fnref-'+number;
+      return '<sup class="footnote-ref"><a id="'+refId+'" href="#fn-'+number+'" data-footnote-ref aria-describedby="footnote-label">'+number+'</a></sup>';
+    });
+    var html=marked.parse(text,{breaks:true});
+    html=html.replace(/@@SPOILER_(\\d+)@@/g,function(_,index){
+      var body=spoilers[Number(index)]||'';
+      var rendered=marked.parseInline?marked.parseInline(body):marked.parse(body,{breaks:true});
+      return '<span class="spoiler" role="button" tabindex="0" aria-label="点击显示隐藏内容" onclick="this.classList.add(\\'revealed\\')" onkeydown="if(event.key===\\'Enter\\'||event.key===\\' \\'){event.preventDefault();this.classList.add(\\'revealed\\')}">'+rendered+'</span>';
+    });
+    if(!notes.length)return html;
+    var items=notes.map(function(body,index){
+      var number=index+1;
+      return '<li id="fn-'+number+'">'+marked.parse(body,{breaks:true})+' <a class="footnote-backref" href="#fnref-'+number+'" aria-label="Back to content">Back</a></li>';
+    }).join('');
+    return html+'<section class="footnotes" data-footnotes><h2 id="footnote-label" style="position:absolute;left:-9999px">Footnotes</h2><ol>'+items+'</ol></section>';
+  };
+})();
+</script>`
+
 function updateItems(posts: Post[]): UpdateItem[] {
   return posts.map(p => ({ title: p.title, url: `/post/${p.slug}`, createdAt: p.created_at }))
 }
@@ -384,10 +432,11 @@ ${titleField}
   <div class="preview-pane" id="md-prev"></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+${MARKDOWN_SCRIPT}
 <script>
 (function(){
 const src=document.getElementById('md-src'),prev=document.getElementById('md-prev'),status=document.getElementById('image-upload-status');
-function render(){prev.innerHTML=marked.parse(src.value||'',{breaks:true});}
+function render(){prev.innerHTML=window.renderMarkdown(src.value||'');}
 function setStatus(text){if(status)status.textContent=text||'';}
 function insertText(text){
   const start=src.selectionStart||0,end=src.selectionEnd||0;
@@ -502,7 +551,7 @@ ${heatmap(posts)}
   return layout(cfg.title, body, false, loggedInUsername, cfg, updateItems(posts))
 }
 
-export function postDetail(post: Post, comments: Comment[], loggedInUsername: string | null, cfg: SiteConfig = DEFAULT_CONFIG): string {
+export function postDetail(post: Post, comments: Comment[], loggedInUsername: string | null, cfg: SiteConfig = DEFAULT_CONFIG, giscus?: GiscusConfig | null): string {
   const commentList = comments.map(c =>
     `<div class="comment"><span class="comment-author">${esc(c.author)}</span><span class="comment-date">${c.created_at.slice(0, 10)}</span><div class="comment-body">${esc(c.body)}</div></div>`
   ).join('')
@@ -515,12 +564,14 @@ export function postDetail(post: Post, comments: Comment[], loggedInUsername: st
 
   let summaries: string[] = []
   try { const a = post.ai_summary ? JSON.parse(post.ai_summary) : []; summaries = Array.isArray(a) ? a.map((s: any) => typeof s === 'string' ? s : '') : [] } catch { summaries = [] }
+  const giscusComments = giscusWidget(giscus)
 
   const body = `<div class="wrap"><div class="article">
 <h1>${esc(post.title)}</h1>
 <div class="article-meta">${post.created_at.slice(0, 10)}</div>
 <div class="article-body" id="post-body"></div>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+${MARKDOWN_SCRIPT}
 <script>
 (function(){
 var raw=${JSON.stringify(post.body)};
@@ -529,24 +580,57 @@ var re=/\\[ai-summary\\]([\\s\\S]*?)\\[\\/ai-summary\\]/g;
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 var out='',last=0,m,i=0;
 while((m=re.exec(raw))!==null){
-  out+=marked.parse(raw.slice(last,m.index),{breaks:true});
+  out+=window.renderMarkdown(raw.slice(last,m.index));
   var summary=summaries[i++];
-  out+='<div class="ai-summary-block">'+marked.parse(m[1],{breaks:true});
+  out+='<div class="ai-summary-block">'+window.renderMarkdown(m[1]);
   if(summary){out+='<div class="ai-summary-box"><span class="ai-summary-label">AI 总结</span><div class="ai-summary-text">'+esc(summary)+'</div></div>';}
   out+='</div>';
   last=m.index+m[0].length;
 }
-out+=marked.parse(raw.slice(last),{breaks:true});
+out+=window.renderMarkdown(raw.slice(last));
 document.getElementById('post-body').innerHTML=out;
 })();
 </script>
 <div class="comments">
   <h2>评论 (${comments.length})</h2>
-  ${commentList}
-  ${commentForm}
+  ${giscusComments}
 </div>
 </div></div>`
   return layout(post.title, body, false, loggedInUsername, cfg)
+}
+
+function giscusWidget(cfg?: GiscusConfig | null): string {
+  if (!cfg || !cfg.repo || !cfg.repoId || !cfg.category || !cfg.categoryId) {
+    return `<h2 class="giscus-title">评论</h2><p class="auth-prompt">Giscus 尚未配置。请设置 GISCUS_REPO_ID、GISCUS_CATEGORY 和 GISCUS_CATEGORY_ID。</p>`
+  }
+  return `<h2 class="giscus-title">评论</h2>
+<script src="https://giscus.app/client.js"
+  data-repo="${esc(cfg.repo)}"
+  data-repo-id="${esc(cfg.repoId)}"
+  data-category="${esc(cfg.category)}"
+  data-category-id="${esc(cfg.categoryId)}"
+  data-mapping="${esc(cfg.mapping)}"
+  data-strict="${esc(cfg.strict)}"
+  data-reactions-enabled="${esc(cfg.reactionsEnabled)}"
+  data-emit-metadata="${esc(cfg.emitMetadata)}"
+  data-input-position="${esc(cfg.inputPosition)}"
+  data-theme="preferred_color_scheme"
+  data-lang="${esc(cfg.lang)}"
+  crossorigin="anonymous"
+  async></script>
+<script>
+(function(){
+  function sendTheme(){
+    var frame=document.querySelector('iframe.giscus-frame');
+    if(!frame)return;
+    var theme=document.documentElement.dataset.theme==='dark'?'dark':'light';
+    frame.contentWindow.postMessage({giscus:{setConfig:{theme:theme}}},'https://giscus.app');
+  }
+  var observer=new MutationObserver(sendTheme);
+  observer.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  setTimeout(sendTheme,800);
+})();
+</script>`
 }
 
 export function loginPage(error?: string): string {
@@ -627,7 +711,8 @@ export function pageDetail(page: PageItem, cfg: SiteConfig = DEFAULT_CONFIG, log
 <h1>${esc(page.title)}</h1>
 <div class="article-body" id="post-body"></div>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script>document.getElementById('post-body').innerHTML=marked.parse(${JSON.stringify(page.body)},{breaks:true});</script>
+${MARKDOWN_SCRIPT}
+<script>document.getElementById('post-body').innerHTML=window.renderMarkdown(${JSON.stringify(page.body)});</script>
 </div></div>`
   return layout(page.title, body, false, loggedInUsername, cfg)
 }
@@ -640,6 +725,40 @@ export function pageForm(page?: PageItem): string {
   <input name="slug" class="pf-input" placeholder="路径 slug（如 about）" required value="${page ? esc(page.slug) : ''}" style="margin-top:.5rem">
   <div style="margin-top:.75rem"><button class="btn" type="submit">保存</button></div>
 </form></div>`, true)
+}
+
+export function termsPage(cfg: SiteConfig = DEFAULT_CONFIG, loggedInUsername?: string | null): string {
+  return legalPage('用户协议', `<h2>一、服务说明</h2>
+<p>本博客提供文章阅读、页面浏览、订阅提醒以及基于 Giscus 的评论互动功能。访问或使用本网站，即表示你已阅读并同意本协议。</p>
+<h2>二、账号与评论</h2>
+<p>评论服务由 Giscus 基于 GitHub Discussions 提供。你发布评论时，需要遵守 GitHub 的相关条款，也需要对自己发布的内容负责。</p>
+<h2>三、内容使用</h2>
+<p>除非页面另有说明，本博客原创内容归作者所有。未经许可，请勿将文章用于商业转载、批量采集或误导性再发布。</p>
+<h2>四、禁止行为</h2>
+<p>请勿发布违法、侵权、骚扰、垃圾广告、恶意代码、自动化滥用或破坏网站正常运行的内容。</p>
+<h2>五、免责声明</h2>
+<p>博客内容主要用于个人记录与交流，不构成专业建议。因使用本站内容产生的判断和后果，由使用者自行承担。</p>
+<h2>六、协议变更</h2>
+<p>本协议可能随网站功能调整而更新，更新后会在本页面公布。</p>`, cfg, loggedInUsername)
+}
+
+export function privacyPage(cfg: SiteConfig = DEFAULT_CONFIG, loggedInUsername?: string | null): string {
+  return legalPage('隐私协议', `<h2>一、我们收集的信息</h2>
+<p>本站可能保存账号登录所需的会话 Cookie、订阅提醒 Cookie、访问请求产生的基础日志，以及你主动提交的内容。</p>
+<h2>二、第三方评论</h2>
+<p>评论区使用 Giscus。加载和使用评论功能时，GitHub/Giscus 可能按照其隐私政策处理你的 GitHub 账号信息、评论内容、设备与网络信息。</p>
+<h2>三、信息用途</h2>
+<p>这些信息用于维持登录状态、提供订阅提醒、展示评论、排查故障、保障网站安全和改进内容体验。</p>
+<h2>四、Cookie</h2>
+<p>本站使用 Cookie 保存登录会话和订阅状态。你可以在浏览器中清除 Cookie，但相关功能可能需要重新登录或重新订阅。</p>
+<h2>五、数据安全</h2>
+<p>我们会采取合理措施保护数据，但互联网传输和第三方服务无法保证绝对安全。</p>
+<h2>六、联系我们</h2>
+<p>如需删除评论，请在 GitHub Discussions 中处理，或通过网站公开联系方式联系站点维护者。</p>`, cfg, loggedInUsername)
+}
+
+function legalPage(title: string, content: string, cfg: SiteConfig, loggedInUsername?: string | null): string {
+  return layout(title, `<div class="wrap"><div class="article"><h1>${esc(title)}</h1><div class="article-body">${content}</div></div></div>`, false, loggedInUsername, cfg)
 }
 
 export function postForm(post?: Post): string {

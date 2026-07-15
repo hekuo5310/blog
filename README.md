@@ -173,7 +173,7 @@ wrangler secret put GISCUS_CATEGORY
 wrangler secret put GISCUS_CATEGORY_ID
 ```
 
-这三个值本身不是密码，使用 `[vars]` 配置更直观；如果不希望它们出现在配置文件中，也可以使用上面的 secret 命令。`GISCUS_REPO`、`GISCUS_MAPPING` 和 `GISCUS_LANG` 为可选项，默认值分别是 `ZerexaNet/blog`、`pathname` 和 `zh-CN`。
+这三个值本身不是密码，使用 `[vars]` 配置更直观；如果不希望它们出现在配置文件中，也可以使用上面的 secret 命令。`GISCUS_REPO`、`GISCUS_MAPPING` 和 `GISCUS_LANG` 为可选项，默认值分别是 `hekuo5310/blog`、`pathname` 和 `zh-CN`。
 
 ### 4. 本地开发配置
 

@@ -46,7 +46,7 @@ async function getConfig(env: Env): Promise<SiteConfig> {
 function getGiscusConfig(env: Env): GiscusConfig | null {
   if (!env.GISCUS_REPO_ID || !env.GISCUS_CATEGORY || !env.GISCUS_CATEGORY_ID) return null
   return {
-    repo: env.GISCUS_REPO || 'ZerexaNet/blog',
+    repo: env.GISCUS_REPO || 'hekuo5310/blog',
     repoId: env.GISCUS_REPO_ID,
     category: env.GISCUS_CATEGORY,
     categoryId: env.GISCUS_CATEGORY_ID,

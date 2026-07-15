@@ -127,6 +127,16 @@ migrations/
 wrangler.toml           Workers 配置
 ```
 
+## RSS 订阅
+
+RSS 订阅地址为：
+
+```text
+https://你的域名/rss.xml
+```
+
+也兼容 `https://你的域名/feed.xml`。将地址复制到 Feedly、Inoreader、Follow 等 RSS 阅读器即可订阅公开文章更新。
+
 ## Giscus 评论配置
 
 本站文章评论使用 Giscus，评论内容会存储在 GitHub Discussions 中。配置前请准备一个公开的 GitHub 仓库，并在仓库的 `Settings -> Features` 中开启 `Discussions`。

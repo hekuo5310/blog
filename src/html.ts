@@ -212,7 +212,7 @@ th{font-weight:600;color:var(--muted);font-size:.8rem;text-transform:uppercase;l
 
 export function layout(title: string, body: string, adminNav = false, loggedInUsername?: string | null, cfg: SiteConfig = DEFAULT_CONFIG, updates: UpdateItem[] = []): string {
   const extraLinks = cfg.navLinks.map(l => `<a href="${esc(l.url)}">${esc(l.label)}</a>`).join('')
-  const subscribeToggle = `<button class="subscribe-toggle" type="button" id="subscribe-toggle" aria-pressed="false">订阅</button>`
+  const subscribeToggle = `<a class="subscribe-toggle" href="/rss.xml" title="RSS 订阅">RSS</a>`
   const themeToggle = `<button class="nav-icon theme-toggle" type="button" id="theme-toggle" aria-label="切换夜间模式" aria-pressed="false" title="切换夜间模式"><span class="theme-icon moon" aria-hidden="true"></span></button>`
   const updateJson = JSON.stringify(updates)
   const rightNav = adminNav
@@ -220,7 +220,7 @@ export function layout(title: string, body: string, adminNav = false, loggedInUs
     : loggedInUsername
       ? `<div class="nav-links">${extraLinks}<span>${esc(loggedInUsername)}</span>${subscribeToggle}${themeToggle}<form method="post" action="/logout-user" style="display:inline"><button class="nav-icon">退出</button></form></div>`
       : `<div class="nav-links">${extraLinks}<a href="/login">登录</a><a href="/register">注册</a>${subscribeToggle}${themeToggle}</div>`
-  return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} — ${esc(cfg.title)}</title><script>
+  return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="alternate" type="application/rss+xml" title="${esc(cfg.title)} RSS" href="/rss.xml"><title>${title} — ${esc(cfg.title)}</title><script>
 (function(){
   var saved=localStorage.getItem('theme');
   var systemDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;

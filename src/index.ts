@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { postList, postDetail, loginPage, userLoginPage, registerPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, DEFAULT_CONFIG } from './html'
-import type { GiscusConfig, SiteConfig } from './html'
+import type { GiscusConfig, SiteConfig, Post } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish } from './pages'
 import { createSession, validateSession, deleteSession, sessionCookie, clearCookie } from './auth'
 import { hashPassword, createUserSession, getUserFromSession, deleteUserSession, userSessionCookie, clearUserCookie } from './user-auth'
@@ -59,6 +59,39 @@ function getGiscusConfig(env: Env): GiscusConfig | null {
   }
 }
 
+function xmlEscape(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+}
+
+function rssDate(value: string): string {
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T') + 'Z'
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? new Date().toUTCString() : date.toUTCString()
+}
+
+function rssDescription(body: string): string {
+  return body
+    .replace(/\[ai-summary\][\s\S]*?\[\/ai-summary\]/gi, '')
+    .replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, '$1')
+    .replace(/\^\[([^\]]+)\]/g, '$1')
+    .replace(/[#*_`>\[\]]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 300)
+}
+
+async function rssFeed(c: Context<{ Bindings: Env }>) {
+  const posts = await listPublicPosts(c)
+  const origin = new URL(c.req.url).origin
+  const title = (await getConfig(c.env)).title
+  const items = posts.map((post: Post) => {
+    const url = `${origin}/post/${encodeURIComponent(post.slug)}`
+    return `<item><title>${xmlEscape(post.title)}</title><link>${xmlEscape(url)}</link><guid isPermaLink="true">${xmlEscape(url)}</guid><description>${xmlEscape(rssDescription(post.body))}</description><pubDate>${rssDate(post.created_at)}</pubDate></item>`
+  }).join('')
+  const feed = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${xmlEscape(title)}</title><link>${xmlEscape(origin)}</link><description>${xmlEscape(title)} RSS 订阅</description><language>zh-CN</language>${items}</channel></rss>`
+  return new Response(feed, { headers: { 'Content-Type': 'application/rss+xml; charset=UTF-8', 'Cache-Control': 'public, max-age=300' } })
+}
+
 app.use('/admin/*', async (c, next) => {
   if (c.req.path === '/admin/login') return next()
   if (!await validateSession(c)) return c.redirect('/admin/login')
@@ -77,6 +110,9 @@ app.get('/updates.json', async (c) => {
   const posts = await listPublicPosts(c)
   return c.json(posts.map(p => ({ title: p.title, url: `/post/${p.slug}`, createdAt: p.created_at })))
 })
+
+app.get('/rss.xml', rssFeed)
+app.get('/feed.xml', rssFeed)
 
 app.get('/post/:slug', async (c) => {
   const post = await getPostBySlug(c, c.req.param('slug'))

@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "blog",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-09-23",
+  "keep_vars": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "blog-db",
+      "database_id": "cdf47b47-676e-41da-9262-1e47cd7c1230"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "1abb51160d5e47dbb773d8dea1b7313f"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "blog-images"
+    }
+  ],
+  "vars": {
+    "OPENAI_BASE_URL": "https://api.deepseek.com/v1",
+    "OPENAI_MODEL": "deepseek-v4-flash"
+  }
+}

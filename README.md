@@ -96,7 +96,7 @@ wrangler d1 execute blog-db --local --file=migrations/0003_pages.sql
 wrangler d1 execute blog-db --local --file=migrations/0004_ai_summary.sql
 wrangler d1 execute blog-db --local --file=migrations/0005_post_activities.sql
 wrangler d1 execute blog-db --local --file=migrations/0006_remove_user_system.sql
-wrangler dev
+npm run dev
 ```
 
 本地访问 `http://localhost:8787`，管理后台 `/admin/login`。
@@ -131,7 +131,8 @@ migrations/
   0004_ai_summary.sql   posts 增加 ai_summary 列
   0005_post_activities.sql  文章发布与修改活动
   0006_remove_user_system.sql  删除旧用户与本地评论表
-wrangler.toml           Workers 配置
+wrangler.jsonc          云端部署配置（不含密钥）
+wrangler.toml           本地配置（Git 忽略）
 ```
 
 ## RSS 订阅

@@ -105,8 +105,7 @@ a:hover{opacity:.7}
 /* heatmap */
 .heatmap-wrap{margin:2.5rem 0}
 .heatmap-title{display:flex;justify-content:space-between;font-size:.8rem;color:var(--subtle);margin-bottom:.5rem}
-.heatmap{display:grid;grid-template-columns:auto 1fr;gap:.25rem;align-items:start}
-.hm-ylabels{display:flex;flex-direction:column;gap:2px;padding-top:18px;font-size:.7rem;color:var(--faint);width:1.5rem;text-align:right}
+.heatmap{display:block}
 .hm-grid{overflow-x:auto}
 .hm-months{display:grid;grid-auto-columns:10px;gap:2px;font-size:.7rem;color:var(--faint);margin-bottom:3px;min-height:12px}
 .hm-month{white-space:nowrap}
@@ -539,7 +538,6 @@ function heatmap(activities: PostActivity[]): string {
   <span id="hm-year-nav" style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap"></span>
 </div>
 <div class="heatmap">
-  <div class="hm-ylabels"><span></span><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span></div>
   <div class="hm-grid">
     <div class="hm-months" id="hm-months"></div>
     <div class="hm-cells" id="hm-cells"></div>

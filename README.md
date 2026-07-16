@@ -1,12 +1,13 @@
 # Blog
 
-全栈博客，运行在 Cloudflare Workers。D1 存文章/评论，KV 存 session。
+全栈博客，运行在 Cloudflare Workers。D1 存文章与页面，KV 存管理员 session 和站点配置。
 
 ## 功能
 
-- 公开前端：文章列表、文章详情、评论
-- 管理后台：新建/编辑/删除/发布文章，删除评论
+- 公开前端：文章列表、文章详情、RSS 订阅、Giscus 评论
+- 管理后台：新建/编辑/删除/发布文章与页面
 - 管理员登录（单账号，env secret）
+- 无公开用户系统，评论身份验证由 GitHub/Giscus 提供
 - AI 总结：文章内 `[ai-summary]...[/ai-summary]` 标记的内容，发帖时一次性调用 OpenAI 协议 API 生成总结，渲染时原内容在上、AI 总结框在下
 - 全年文章活动墙：记录公开文章的发布和真实修改，点击日期可查看具体改动
 
@@ -59,6 +60,7 @@ wrangler d1 execute blog-db --file=migrations/0002_users.sql
 wrangler d1 execute blog-db --file=migrations/0003_pages.sql
 wrangler d1 execute blog-db --file=migrations/0004_ai_summary.sql
 wrangler d1 execute blog-db --file=migrations/0005_post_activities.sql
+wrangler d1 execute blog-db --file=migrations/0006_remove_user_system.sql
 ```
 
 ### 6. 配置 AI 总结（可选）
@@ -93,6 +95,7 @@ wrangler d1 execute blog-db --local --file=migrations/0002_users.sql
 wrangler d1 execute blog-db --local --file=migrations/0003_pages.sql
 wrangler d1 execute blog-db --local --file=migrations/0004_ai_summary.sql
 wrangler d1 execute blog-db --local --file=migrations/0005_post_activities.sql
+wrangler d1 execute blog-db --local --file=migrations/0006_remove_user_system.sql
 wrangler dev
 ```
 
@@ -121,13 +124,13 @@ src/
   index.ts        路由入口
   auth.ts         session 管理
   posts.ts        文章 CRUD
-  comments.ts     评论
   html.ts         HTML 模板
   ai-summary.ts   AI 总结：抽取标记块、调用 API
 migrations/
   0001_init.sql         建表
   0004_ai_summary.sql   posts 增加 ai_summary 列
   0005_post_activities.sql  文章发布与修改活动
+  0006_remove_user_system.sql  删除旧用户与本地评论表
 wrangler.toml           Workers 配置
 ```
 

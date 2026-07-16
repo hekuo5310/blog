@@ -5,7 +5,6 @@ export type PostActivityChanges = {
   body?: { removed: string; added: string; truncated: boolean }
 }
 export type PostActivity = { id: number; post_id: number; post_title: string; post_slug: string; event_type: 'published' | 'updated'; changes: PostActivityChanges; created_at: string }
-export type Comment = { id: number; post_id: number; author: string; body: string; created_at: string; user_id: number | null }
 export type SiteConfig = { title: string; desc: string; navLinks: { label: string; url: string }[] }
 export type GiscusConfig = { repo: string; repoId: string; category: string; categoryId: string; mapping: string; strict: string; reactionsEnabled: string; emitMetadata: string; inputPosition: string; lang: string }
 type UpdateItem = { title: string; url: string; createdAt: string }
@@ -168,7 +167,7 @@ a:hover{opacity:.7}
 .article-body pre code{background:none;padding:0}
 .article-body blockquote{border-left:3px solid var(--input-border);padding-left:1rem;color:var(--muted);margin:.75rem 0}
 .article-body ul,.article-body ol{padding-left:1.5rem;margin:.75rem 0}
-.article-body img{max-width:100%;border-radius:6px}
+.article-body img,.preview-pane img{display:block;max-width:100%;width:auto;height:auto;object-fit:contain;border-radius:6px}
 .footnotes{margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border);font-size:.9rem;color:var(--muted)}
 .footnotes ol{padding-left:1.3rem}
 .footnotes li{margin:.4rem 0}
@@ -195,13 +194,6 @@ a:hover{opacity:.7}
 .comments>h2:first-child{display:none}
 .comments .giscus-title{display:block}
 .giscus-frame{width:100%}
-.comment{padding:.75rem 0;border-bottom:1px solid var(--border-soft)}
-.comment-author{font-weight:600;font-size:.9rem}
-.comment-date{color:var(--faint);font-size:.8rem;margin-left:.5rem}
-.comment-body{margin-top:.3rem;font-size:.92rem;color:var(--text-soft);line-height:1.6}
-.comment-form{margin-top:1.5rem}
-.comment-form textarea{width:100%;padding:.75rem;border:1px solid var(--input-border);border-radius:6px;font-size:.9rem;font-family:inherit;resize:vertical;min-height:100px;outline:none;background:var(--surface);color:var(--text)}
-.comment-form textarea:focus{border-color:var(--text)}
 .auth-prompt{color:var(--muted);font-size:.9rem;margin-top:1rem}
 .auth-prompt a{color:var(--text);text-decoration:underline}
 
@@ -217,8 +209,6 @@ a:hover{opacity:.7}
 .btn-danger{background:var(--danger);color:#fff}
 .btn-ghost{background:none;color:var(--muted);border:1px solid var(--input-border)}
 .btn-ghost:hover{background:var(--bg-soft);color:var(--text)}
-.form-footer{margin-top:.75rem;font-size:.88rem;color:var(--muted)}
-.form-footer a{color:var(--text);text-decoration:underline}
 .error{color:var(--danger);font-size:.88rem;margin-bottom:.5rem}
 
 /* admin */
@@ -248,16 +238,14 @@ th{font-weight:600;color:var(--muted);font-size:.8rem;text-transform:uppercase;l
 [style*="border-bottom:1px solid #f0f0f0"],[style*="border-bottom: 1px solid #f0f0f0"]{border-bottom-color:var(--border)!important}
 `
 
-export function layout(title: string, body: string, adminNav = false, loggedInUsername?: string | null, cfg: SiteConfig = DEFAULT_CONFIG, updates: UpdateItem[] = []): string {
+export function layout(title: string, body: string, adminNav = false, _loggedInUsername?: string | null, cfg: SiteConfig = DEFAULT_CONFIG, updates: UpdateItem[] = []): string {
   const extraLinks = cfg.navLinks.map(l => `<a href="${esc(l.url)}">${esc(l.label)}</a>`).join('')
   const subscribeToggle = `<button class="subscribe-toggle" type="button" id="subscribe-toggle" aria-pressed="false">订阅</button>`
   const themeToggle = `<button class="nav-icon theme-toggle" type="button" id="theme-toggle" aria-label="切换夜间模式" aria-pressed="false" title="切换夜间模式"><span class="theme-icon moon" aria-hidden="true"></span></button>`
   const updateJson = JSON.stringify(updates)
   const rightNav = adminNav
     ? `<div class="nav-links"><a href="/admin">管理</a><a href="/admin/post/new">新建</a><a href="/admin/settings">设置</a>${themeToggle}<form method="post" action="/admin/logout" style="display:inline"><button class="nav-icon">退出</button></form></div>`
-    : loggedInUsername
-      ? `<div class="nav-links">${extraLinks}<span>${esc(loggedInUsername)}</span>${subscribeToggle}${themeToggle}<form method="post" action="/logout-user" style="display:inline"><button class="nav-icon">退出</button></form></div>`
-      : `<div class="nav-links">${extraLinks}<a href="/login">登录</a><a href="/register">注册</a>${subscribeToggle}${themeToggle}</div>`
+    : `<div class="nav-links">${extraLinks}${subscribeToggle}${themeToggle}</div>`
   return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="alternate" type="application/rss+xml" title="${esc(cfg.title)} RSS" href="/rss.xml"><title>${title} — ${esc(cfg.title)}</title><script>
 (function(){
   var saved=localStorage.getItem('theme');
@@ -651,7 +639,7 @@ render(curYear);
 </script>`
 }
 
-export function postList(posts: Post[], activities: PostActivity[], loggedInUsername?: string | null, cfg: SiteConfig = DEFAULT_CONFIG): string {
+export function postList(posts: Post[], activities: PostActivity[], cfg: SiteConfig = DEFAULT_CONFIG): string {
   const items = posts.length
     ? posts.map(p => `<div class="post-item">
   <div class="post-date">${p.created_at.slice(0, 10)}</div>
@@ -664,20 +652,10 @@ export function postList(posts: Post[], activities: PostActivity[], loggedInUser
 ${heatmap(activities)}
 <div class="post-list">${items}</div>
 </div>` 
-  return layout(cfg.title, body, false, loggedInUsername, cfg, updateItems(posts))
+  return layout(cfg.title, body, false, undefined, cfg, updateItems(posts))
 }
 
-export function postDetail(post: Post, comments: Comment[], loggedInUsername: string | null, cfg: SiteConfig = DEFAULT_CONFIG, giscus?: GiscusConfig | null): string {
-  const commentList = comments.map(c =>
-    `<div class="comment"><span class="comment-author">${esc(c.author)}</span><span class="comment-date">${c.created_at.slice(0, 10)}</span><div class="comment-body">${esc(c.body)}</div></div>`
-  ).join('')
-  const commentForm = loggedInUsername
-    ? `<div class="comment-form"><form method="post" action="/post/${post.slug}/comment">
-  <textarea name="body" placeholder="写下你的评论…" required maxlength="1000"></textarea>
-  <br><button class="btn btn-sm" style="margin-top:.5rem" type="submit">提交</button>
-</form></div>`
-    : `<p class="auth-prompt"><a href="/login">登录</a> 或 <a href="/register">注册</a> 后发表评论</p>`
-
+export function postDetail(post: Post, cfg: SiteConfig = DEFAULT_CONFIG, giscus?: GiscusConfig | null): string {
   let summaries: string[] = []
   try { const a = post.ai_summary ? JSON.parse(post.ai_summary) : []; summaries = Array.isArray(a) ? a.map((s: any) => typeof s === 'string' ? s : '') : [] } catch { summaries = [] }
   const giscusComments = giscusWidget(giscus)
@@ -708,11 +686,10 @@ document.getElementById('post-body').innerHTML=out;
 })();
 </script>
 <div class="comments">
-  <h2>评论 (${comments.length})</h2>
   ${giscusComments}
 </div>
 </div></div>`
-  return layout(post.title, body, false, loggedInUsername, cfg)
+  return layout(post.title, body, false, undefined, cfg)
 }
 
 function giscusWidget(cfg?: GiscusConfig | null): string {
@@ -756,24 +733,6 @@ export function loginPage(error?: string): string {
   <input name="password" type="password" placeholder="密码" required autocomplete="current-password">
   <button class="btn" type="submit">登录</button>
 </form></div>`)
-}
-
-export function userLoginPage(error?: string): string {
-  return layout('登录', `<div class="form-wrap"><h1>登录</h1>${error ? `<p class="error">${esc(error)}</p>` : ''}
-<form method="post" action="/login" class="form-group">
-  <input name="username" placeholder="用户名" required autocomplete="username">
-  <input name="password" type="password" placeholder="密码" required autocomplete="current-password">
-  <button class="btn" type="submit">登录</button>
-</form><p class="form-footer">没有账号？<a href="/register">注册</a></p></div>`)
-}
-
-export function registerPage(error?: string): string {
-  return layout('注册', `<div class="form-wrap"><h1>注册</h1>${error ? `<p class="error">${esc(error)}</p>` : ''}
-<form method="post" action="/register" class="form-group">
-  <input name="username" placeholder="用户名" required maxlength="30">
-  <input name="password" type="password" placeholder="密码（至少6位）" required minlength="6">
-  <button class="btn" type="submit">注册</button>
-</form><p class="form-footer">已有账号？<a href="/login">登录</a></p></div>`)
 }
 
 export function adminDashboard(posts: Post[]): string {
@@ -822,7 +781,7 @@ export function adminPageDashboard(pages: PageItem[]): string {
 <table><thead><tr><th>标题</th><th>路径</th><th>状态</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>`, true)
 }
 
-export function pageDetail(page: PageItem, cfg: SiteConfig = DEFAULT_CONFIG, loggedInUsername?: string | null): string {
+export function pageDetail(page: PageItem, cfg: SiteConfig = DEFAULT_CONFIG): string {
   const body = `<div class="wrap"><div class="article">
 <h1>${esc(page.title)}</h1>
 <div class="article-body" id="post-body"></div>
@@ -830,7 +789,7 @@ export function pageDetail(page: PageItem, cfg: SiteConfig = DEFAULT_CONFIG, log
 ${MARKDOWN_SCRIPT}
 <script>document.getElementById('post-body').innerHTML=window.renderMarkdown(${JSON.stringify(page.body)});</script>
 </div></div>`
-  return layout(page.title, body, false, loggedInUsername, cfg)
+  return layout(page.title, body, false, undefined, cfg)
 }
 
 export function pageForm(page?: PageItem): string {
@@ -843,38 +802,64 @@ export function pageForm(page?: PageItem): string {
 </form></div>`, true)
 }
 
-export function termsPage(cfg: SiteConfig = DEFAULT_CONFIG, loggedInUsername?: string | null): string {
-  return legalPage('用户协议', `<h2>一、服务说明</h2>
-<p>本博客提供文章阅读、页面浏览、订阅提醒以及基于 Giscus 的评论互动功能。访问或使用本网站，即表示你已阅读并同意本协议。</p>
-<h2>二、账号与评论</h2>
-<p>评论服务由 Giscus 基于 GitHub Discussions 提供。你发布评论时，需要遵守 GitHub 的相关条款，也需要对自己发布的内容负责。</p>
-<h2>三、内容使用</h2>
-<p>除非页面另有说明，本博客原创内容归作者所有。未经许可，请勿将文章用于商业转载、批量采集或误导性再发布。</p>
-<h2>四、禁止行为</h2>
-<p>请勿发布违法、侵权、骚扰、垃圾广告、恶意代码、自动化滥用或破坏网站正常运行的内容。</p>
-<h2>五、免责声明</h2>
-<p>博客内容主要用于个人记录与交流，不构成专业建议。因使用本站内容产生的判断和后果，由使用者自行承担。</p>
-<h2>六、协议变更</h2>
-<p>本协议可能随网站功能调整而更新，更新后会在本页面公布。</p>`, cfg, loggedInUsername)
+export function termsPage(cfg: SiteConfig = DEFAULT_CONFIG): string {
+  return legalPage('用户协议', `<p><strong>生效日期：2026 年 7 月 16 日</strong></p>
+<h2>一、协议适用与接受</h2>
+<p>本用户协议适用于你对本博客及其文章、页面、RSS 订阅和第三方评论功能（合称“本服务”）的访问与使用。访问、浏览或继续使用本服务，即表示你已阅读、理解并同意本协议及<a href="/privacy">隐私协议</a>。如你不同意，请停止使用本服务。</p>
+<p>如你代表组织使用本服务，你确认自己有权使该组织受本协议约束。未成年人应在父母或法定监护人同意和指导下使用本服务。</p>
+<h2>二、服务内容与非商业性质</h2>
+<p>本服务主要用于发布个人文章、展示页面、提供 RSS 更新以及通过 Giscus 和 GitHub Discussions 进行互动。除非另有明确说明，本服务免费提供，不承诺持续提供任何特定功能、存储期限、更新频率或支持等级。</p>
+<p>我们可以基于维护、安全、法律要求或产品调整，对本服务进行更新、限制、暂停或终止，并会在合理可行的情况下通过网站页面提供提示。</p>
+<h2>三、第三方身份与安全</h2>
+<p>本站不向公众提供注册或登录系统。使用 Giscus 评论时，你需要通过 GitHub 完成身份验证，并应遵守 GitHub 与 Giscus 的相关条款。你应妥善保护第三方账号、密码和会话，不得冒用他人身份或未经授权使用他人账号。</p>
+<p>如发现与本站有关的安全漏洞或异常行为，请及时通过本协议列明的联系方式通知我们。我们可以为保护访问者或网站安全而限制相关功能或访问。</p>
+<h2>四、用户内容与许可</h2>
+<p>你对自己提交的评论、文字、链接及其他内容保留依法享有的权利。为运行和展示本服务，你授予我们一项非独占、全球范围、免许可费的许可，仅用于托管、缓存、复制、展示、格式转换、审核和管理你提交的内容；该许可在相关内容从本服务删除后终止，但依法需要保留、备份尚未轮换或内容仍存在于 GitHub 等第三方服务中的情形除外。</p>
+<p>你确认自己拥有提交相关内容所需的权利，且内容不侵犯他人的版权、商标权、隐私权、名誉权或其他合法权益。我们可以对涉嫌违法、侵权、骚扰、欺诈、垃圾信息或违反本协议的内容进行隐藏、删除或限制访问。</p>
+<h2>五、可接受使用规则</h2>
+<p>你不得利用本服务从事违法活动，发布恶意、欺诈、侵权、仇恨、威胁、骚扰或误导性内容，传播病毒、木马、恶意脚本或其他有害代码，未经授权访问账号、服务器、数据库或网络，绕过访问控制或安全措施，实施拒绝服务攻击，干扰其他用户正常使用，或以可能造成不合理负载的方式进行自动抓取、批量请求和垃圾信息投递。</p>
+<p>合理使用公开 RSS、搜索引擎索引和无破坏性的个人阅读工具不受前款限制，但你仍应遵守适用法律、robots 指令及合理的访问频率。</p>
+<h2>六、知识产权</h2>
+<p>除用户内容、第三方内容及另有许可说明的内容外，本博客的原创文章、页面文字、站点设计和相关材料由其权利人保留权利。你可以为个人、非商业目的阅读、引用和分享链接；引用时应注明作者和来源，不得删除权利标识、冒充作者、制作误导性版本，或未经许可进行商业转载和批量再发布。</p>
+<p>开源代码的使用以对应代码仓库中的许可证为准；第三方软件、字体、图像和服务分别受其自身许可证或条款约束。</p>
+<h2>七、第三方服务与链接</h2>
+<p>评论功能由 Giscus 和 GitHub Discussions 提供，页面还可能使用内容分发网络或链接到第三方网站。第三方服务由相应提供者独立运营，并适用其自身条款、隐私政策和可用性安排。我们不控制第三方服务，也不对其内容、安全性、持续可用性或数据处理承担超出适用法律要求的责任。</p>
+<p>第三方链接仅为提供便利，不代表我们认可、担保或与其存在合作关系。访问第三方网站前，请自行核实其内容和政策。</p>
+<h2>八、内容性质与专业建议</h2>
+<p>博客内容主要用于个人记录、技术交流和一般信息分享，可能存在遗漏、错误或过时信息，不构成法律、医疗、财务、投资、安全或其他专业建议。你应结合自身情况独立判断，并在必要时咨询具备资质的专业人士。</p>
+<h2>九、服务可用性与安全</h2>
+<p>我们会采取合理措施维护本服务，但不保证服务始终不中断、无错误、无漏洞，或所有内容永久可用。网络故障、维护、第三方服务中断、不可抗力和安全事件可能影响访问。你应自行保留重要内容的副本，并使用适当的设备和安全措施访问本服务。</p>
+<h2>十、责任限制</h2>
+<p>在适用法律允许的最大范围内，对于因无法访问本服务、依赖博客内容、第三方服务、数据丢失或未经授权访问所产生的间接、附带、特殊或后果性损失，我们不承担责任。本条不排除或限制因过失造成死亡或人身伤害的责任、欺诈或欺诈性虚假陈述的责任，以及依法不得排除或限制的其他责任。</p>
+<p>如果你以消费者身份使用本服务，本协议不影响《2015 年消费者权利法》及其他适用法律赋予你的、不能通过合同排除的法定权利。</p>
+<h2>十一、暂停与终止</h2>
+<p>如你违反本协议、造成安全风险、侵犯他人权利或使我们面临法律责任，我们可以删除或申请删除相关内容、限制评论功能或终止访问。你可以随时停止使用本服务；如需处理与本站有关的个人信息，请参阅隐私协议。</p>
+<h2>十二、协议变更</h2>
+<p>我们可能根据功能、法律或运营变化更新本协议，并在本页面公布新版本和生效日期。重大变更将在合理可行的情况下提供显著提示。变更生效后继续使用本服务，表示你接受更新后的协议；如不同意，应停止使用。</p>
+<h2>十三、一般条款</h2>
+<p>如本协议任何条款被认定为无效、违法或不可执行，该条款将在必要的最小范围内调整或分离，其余条款继续有效。我们未立即行使某项权利不构成放弃。未经我们书面同意，你不得转让本协议项下的权利或义务。</p>
+<h2>十四、适用法律、法院与联系</h2>
+<p>本协议及由本协议或本服务引起或与之相关的任何合同性或非合同性争议，受英格兰和威尔士法律管辖并依其解释。在适用法律允许的范围内，各方同意将争议提交位于英国伦敦的英格兰和威尔士有管辖权法院专属管辖。</p>
+<p>如你以消费者身份享有通常居住地法律赋予的不可排除权利，或依法有权在其他有管辖权的法院提起程序，前述法律选择和法院约定不限制这些强制性权利。发生争议时，建议先通过网站公开联系方式或 <a href="https://github.com/hekuo5310/blog">GitHub 仓库</a>与我们联系并尝试友好解决。</p>`, cfg)
 }
 
-export function privacyPage(cfg: SiteConfig = DEFAULT_CONFIG, loggedInUsername?: string | null): string {
+export function privacyPage(cfg: SiteConfig = DEFAULT_CONFIG): string {
   return legalPage('隐私协议', `<h2>一、我们收集的信息</h2>
-<p>本站可能保存账号登录所需的会话 Cookie、订阅提醒 Cookie、访问请求产生的基础日志，以及你主动提交的内容。</p>
+<p>本站不提供公众账号系统。访问本站时，可能处理 RSS 订阅提醒所需的 Cookie、主题偏好等本地设置、访问请求产生的基础技术日志，以及你通过第三方评论服务主动提交的信息。管理员后台使用的会话仅供站点维护者管理内容，不属于公众用户系统。</p>
 <h2>二、第三方评论</h2>
 <p>评论区使用 Giscus。加载和使用评论功能时，GitHub/Giscus 可能按照其隐私政策处理你的 GitHub 账号信息、评论内容、设备与网络信息。</p>
 <h2>三、信息用途</h2>
-<p>这些信息用于维持登录状态、提供订阅提醒、展示评论、排查故障、保障网站安全和改进内容体验。</p>
+<p>这些信息用于提供 RSS 订阅提醒、保存界面偏好、展示第三方评论、排查故障、保障网站安全和改进内容体验。</p>
 <h2>四、Cookie</h2>
-<p>本站使用 Cookie 保存登录会话和订阅状态。你可以在浏览器中清除 Cookie，但相关功能可能需要重新登录或重新订阅。</p>
+<p>本站公开页面使用 Cookie 保存 RSS 订阅提醒状态，并可能使用浏览器本地存储保存主题偏好。你可以随时在浏览器中清除这些数据；清除后可能需要重新订阅或重新选择主题。</p>
 <h2>五、数据安全</h2>
 <p>我们会采取合理措施保护数据，但互联网传输和第三方服务无法保证绝对安全。</p>
 <h2>六、联系我们</h2>
-<p>如需删除评论，请在 GitHub Discussions 中处理，或通过网站公开联系方式联系站点维护者。</p>`, cfg, loggedInUsername)
+<p>如需删除评论，请在 GitHub Discussions 中处理，或通过网站公开联系方式联系站点维护者。</p>`, cfg)
 }
 
-function legalPage(title: string, content: string, cfg: SiteConfig, loggedInUsername?: string | null): string {
-  return layout(title, `<div class="wrap"><div class="article"><h1>${esc(title)}</h1><div class="article-body">${content}</div></div></div>`, false, loggedInUsername, cfg)
+function legalPage(title: string, content: string, cfg: SiteConfig): string {
+  return layout(title, `<div class="wrap"><div class="article"><h1>${esc(title)}</h1><div class="article-body">${content}</div></div></div>`, false, undefined, cfg)
 }
 
 export function postForm(post?: Post): string {

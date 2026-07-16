@@ -1,12 +1,10 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { postList, postDetail, loginPage, userLoginPage, registerPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, DEFAULT_CONFIG } from './html'
+import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, DEFAULT_CONFIG } from './html'
 import type { GiscusConfig, SiteConfig, Post } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish } from './pages'
 import { createSession, validateSession, deleteSession, sessionCookie, clearCookie } from './auth'
-import { hashPassword, createUserSession, getUserFromSession, deleteUserSession, userSessionCookie, clearUserCookie } from './user-auth'
 import { listPublicPosts, listPublicPostActivities, getPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish } from './posts'
-import { getComments, addComment, deleteComment } from './comments'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries } from './ai-summary'
 
@@ -27,15 +25,7 @@ export type Env = {
   GISCUS_LANG?: string
 }
 
-type User = { id: number; username: string }
-
 const app = new Hono<{ Bindings: Env }>()
-
-async function getLoggedInUser(c: Context<{ Bindings: Env }>): Promise<User | null> {
-  const userId = await getUserFromSession(c)
-  if (!userId) return null
-  return c.env.DB.prepare('SELECT id,username FROM users WHERE id=?').bind(userId).first<User>()
-}
 
 async function getConfig(env: Env): Promise<SiteConfig> {
   const raw = await env.SESSIONS.get('site:config')
@@ -102,8 +92,8 @@ app.use('/admin/*', async (c, next) => {
 app.get('/images/*', serveImage)
 
 app.get('/', async (c) => {
-  const [posts, activities, user, cfg] = await Promise.all([listPublicPosts(c), listPublicPostActivities(c), getLoggedInUser(c), getConfig(c.env)])
-  return c.html(postList(posts, activities, user?.username, cfg))
+  const [posts, activities, cfg] = await Promise.all([listPublicPosts(c), listPublicPostActivities(c), getConfig(c.env)])
+  return c.html(postList(posts, activities, cfg))
 })
 
 app.get('/updates.json', async (c) => {
@@ -117,61 +107,16 @@ app.get('/feed.xml', rssFeed)
 app.get('/post/:slug', async (c) => {
   const post = await getPostBySlug(c, c.req.param('slug'))
   if (!post) return c.notFound()
-  const [comments, user, cfg] = await Promise.all([getComments(c, post.id), getLoggedInUser(c), getConfig(c.env)])
-  return c.html(postDetail(post, comments, user?.username ?? null, cfg, getGiscusConfig(c.env)))
+  const cfg = await getConfig(c.env)
+  return c.html(postDetail(post, cfg, getGiscusConfig(c.env)))
 })
 
 app.get('/terms', async (c) => {
-  const [user, cfg] = await Promise.all([getLoggedInUser(c), getConfig(c.env)])
-  return c.html(termsPage(cfg, user?.username))
+  return c.html(termsPage(await getConfig(c.env)))
 })
 
 app.get('/privacy', async (c) => {
-  const [user, cfg] = await Promise.all([getLoggedInUser(c), getConfig(c.env)])
-  return c.html(privacyPage(cfg, user?.username))
-})
-
-app.post('/post/:slug/comment', async (c) => {
-  const user = await getLoggedInUser(c)
-  if (!user) return c.redirect('/login')
-  const post = await getPostBySlug(c, c.req.param('slug'))
-  if (!post) return c.notFound()
-  const form = await c.req.formData()
-  const body = (form.get('body') as string ?? '').replace(/\r\n/g,'\n').trim().slice(0, 1000)
-  if (!body) return c.redirect(`/post/${post.slug}`)
-  await addComment(c, post.id, user.username, body, user.id)
-  return c.redirect(`/post/${post.slug}`)
-})
-
-// user auth
-app.get('/register', (c) => c.html(registerPage()))
-app.post('/register', async (c) => {
-  const form = await c.req.formData()
-  const username = (form.get('username') as string ?? '').trim().slice(0, 30)
-  const password = (form.get('password') as string ?? '')
-  if (!username || password.length < 6) return c.html(registerPage('用户名不能为空，密码至少6位'), 400)
-  const existing = await c.env.DB.prepare('SELECT id FROM users WHERE username=?').bind(username).first()
-  if (existing) return c.html(registerPage('用户名已存在'), 400)
-  const hash = await hashPassword(password)
-  await c.env.DB.prepare('INSERT INTO users (username,password_hash) VALUES (?,?)').bind(username, hash).run()
-  return c.redirect('/login')
-})
-
-app.get('/login', (c) => c.html(userLoginPage()))
-app.post('/login', async (c) => {
-  const form = await c.req.formData()
-  const username = (form.get('username') as string ?? '').trim()
-  const password = (form.get('password') as string ?? '')
-  const user = await c.env.DB.prepare('SELECT id,password_hash FROM users WHERE username=?').bind(username).first<{ id: number; password_hash: string }>()
-  const hash = await hashPassword(password)
-  if (!user || user.password_hash !== hash) return c.html(userLoginPage('用户名或密码错误'), 401)
-  const token = await createUserSession(c.env, user.id)
-  return new Response(null, { status: 302, headers: { Location: '/', 'Set-Cookie': userSessionCookie(token) } })
-})
-
-app.post('/logout-user', async (c) => {
-  await deleteUserSession(c)
-  return new Response(null, { status: 302, headers: { Location: '/', 'Set-Cookie': clearUserCookie() } })
+  return c.html(privacyPage(await getConfig(c.env)))
 })
 
 // admin auth
@@ -275,17 +220,11 @@ app.post('/admin/post/:id/publish', async (c) => {
   return c.redirect('/admin')
 })
 
-app.post('/admin/comment/:id/delete', async (c) => {
-  await deleteComment(c, Number(c.req.param('id')))
-  return c.redirect('/admin')
-})
-
 // public pages
 app.get('/p/:slug', async (c) => {
   const page = await getPageBySlug(c, c.req.param('slug'))
   if (!page) return c.notFound()
-  const [user, cfg] = await Promise.all([getLoggedInUser(c), getConfig(c.env)])
-  return c.html(pageDetail(page, cfg, user?.username))
+  return c.html(pageDetail(page, await getConfig(c.env)))
 })
 
 // admin pages

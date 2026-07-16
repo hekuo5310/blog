@@ -1,8 +1,11 @@
-export type Post = { id: number; title: string; slug: string; body: string; published: number; created_at: string; ai_summary?: string | null }
+import { ARTICLE_LICENSES, DEFAULT_ARTICLE_LICENSE, getArticleLicense } from './licenses'
+
+export type Post = { id: number; title: string; slug: string; body: string; published: number; created_at: string; ai_summary?: string | null; license?: string | null }
 export type PostActivityChanges = {
   published?: boolean
   title?: { before: string; after: string }
   body?: { removed: string; added: string; truncated: boolean }
+  license?: { before: string; after: string }
 }
 export type PostActivity = { id: number; post_id: number; post_title: string; post_slug: string; event_type: 'published' | 'updated'; changes: PostActivityChanges; created_at: string }
 export type SiteConfig = { title: string; desc: string; navLinks: { label: string; url: string }[] }
@@ -158,6 +161,7 @@ a:hover{opacity:.7}
 .article{padding:2rem 0}
 .article h1{font-size:2rem;font-weight:700;margin-bottom:.5rem}
 .article-meta{color:var(--faint);font-size:.85rem;margin-bottom:2rem}
+.article-meta a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 .article-body{line-height:1.8;font-size:1rem;color:var(--text-soft)}
 .article-body h1,.article-body h2,.article-body h3{margin:1.5rem 0 .5rem;font-weight:600}
 .article-body p{margin:.75rem 0}
@@ -583,6 +587,9 @@ function eventHtml(item){
     detail+='<div class="hm-diff">'+diffBlock('removed','删除',changes.body.removed)+diffBlock('added','新增',changes.body.added)+'</div>';
     if(changes.body.truncated) detail+='<p class="hm-diff-note">改动较长，仅显示开头和结尾。</p>';
   }
+  if(changes.license){
+    detail+='<p class="hm-change-title"><strong>协议：</strong><del>'+h(changes.license.before)+'</del> → <ins>'+h(changes.license.after)+'</ins></p>';
+  }
   return '<article class="hm-event"><div class="hm-event-head"><a class="hm-event-title" href="/post/'+encodeURIComponent(item.post_slug)+'">'+h(item.post_title)+'</a><span class="hm-event-type">'+type+'</span><time class="hm-event-time">'+h(time)+'</time></div>'+detail+'</article>';
 }
 function showDate(key,button){
@@ -657,10 +664,14 @@ export function postDetail(post: Post, cfg: SiteConfig = DEFAULT_CONFIG, giscus?
   let summaries: string[] = []
   try { const a = post.ai_summary ? JSON.parse(post.ai_summary) : []; summaries = Array.isArray(a) ? a.map((s: any) => typeof s === 'string' ? s : '') : [] } catch { summaries = [] }
   const giscusComments = giscusWidget(giscus)
+  const articleLicense = getArticleLicense(post.license)
+  const licenseHtml = articleLicense.url
+    ? `<a href="${articleLicense.url}" rel="license">${esc(articleLicense.value)}</a>`
+    : esc(articleLicense.label)
 
   const body = `<div class="wrap"><div class="article">
 <h1>${esc(post.title)}</h1>
-<div class="article-meta">${post.created_at.slice(0, 10)}</div>
+<div class="article-meta">${post.created_at.slice(0, 10)} · 协议：${licenseHtml}</div>
 <div class="article-body" id="post-body"></div>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 ${MARKDOWN_SCRIPT}
@@ -818,7 +829,8 @@ export function termsPage(cfg: SiteConfig = DEFAULT_CONFIG): string {
 <p>你不得利用本服务从事违法活动，发布恶意、欺诈、侵权、仇恨、威胁、骚扰或误导性内容，传播病毒、木马、恶意脚本或其他有害代码，未经授权访问账号、服务器、数据库或网络，绕过访问控制或安全措施，实施拒绝服务攻击，干扰其他用户正常使用，或以可能造成不合理负载的方式进行自动抓取、批量请求和垃圾信息投递。</p>
 <p>合理使用公开 RSS、搜索引擎索引和无破坏性的个人阅读工具不受前款限制，但你仍应遵守适用法律、robots 指令及合理的访问频率。</p>
 <h2>六、知识产权</h2>
-<p>除用户内容、第三方内容及另有许可说明的内容外，本博客的原创文章、页面文字、站点设计和相关材料由其权利人保留权利。你可以为个人、非商业目的阅读、引用和分享链接；引用时应注明作者和来源，不得删除权利标识、冒充作者、制作误导性版本，或未经许可进行商业转载和批量再发布。</p>
+<p>每篇文章适用其详情页明确标注的许可协议；未作选择或未显示协议时，默认适用 CC BY 4.0。你可以在所标协议允许的范围内复制、分享、改编或使用文章，但必须履行署名、注明修改、相同方式共享、非商业性使用或禁止演绎等对应条件。标注“保留所有权利”的文章仅允许适用法律明确准许的使用，超出范围须事先取得许可。</p>
+<p>页面结构、站点设计、未单独标注协议的非文章材料、用户内容和第三方内容不因文章协议而自动获得许可，并分别由相应权利人保留权利。任何使用均不得冒充作者、删除必要的权利标识或暗示权利人为相关使用背书。</p>
 <p>开源代码的使用以对应代码仓库中的许可证为准；第三方软件、字体、图像和服务分别受其自身许可证或条款约束。</p>
 <h2>七、第三方服务与链接</h2>
 <p>评论功能由 Giscus 和 GitHub Discussions 提供，页面还可能使用内容分发网络或链接到第三方网站。第三方服务由相应提供者独立运营，并适用其自身条款、隐私政策和可用性安排。我们不控制第三方服务，也不对其内容、安全性、持续可用性或数据处理承担超出适用法律要求的责任。</p>
@@ -862,9 +874,14 @@ function legalPage(title: string, content: string, cfg: SiteConfig): string {
 
 export function postForm(post?: Post): string {
   const action = post ? `/admin/post/${post.id}` : '/admin/post'
+  const selectedLicense = getArticleLicense(post?.license ?? DEFAULT_ARTICLE_LICENSE).value
+  const licenseOptions = ARTICLE_LICENSES.map(license => `<option value="${esc(license.value)}"${license.value === selectedLicense ? ' selected' : ''}>${esc(license.label)}</option>`).join('')
   return layout(post ? '编辑文章' : '新建文章', `<div class="admin-wrap"><h1>${post ? '编辑文章' : '新建文章'}</h1>
 <form method="post" action="${action}" id="pf">
   ${editorWidget(post?.title ?? '', post?.body ?? '', false)}
+  <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">文章协议
+    <select class="pf-input" name="license" style="margin-top:.35rem">${licenseOptions}</select>
+  </label>
   <div style="margin-top:.75rem"><button class="btn" type="submit">保存</button></div>
 </form></div>`, true)
 }

@@ -61,6 +61,7 @@ wrangler d1 execute blog-db --file=migrations/0003_pages.sql
 wrangler d1 execute blog-db --file=migrations/0004_ai_summary.sql
 wrangler d1 execute blog-db --file=migrations/0005_post_activities.sql
 wrangler d1 execute blog-db --file=migrations/0006_remove_user_system.sql
+wrangler d1 execute blog-db --file=migrations/0007_post_license.sql
 ```
 
 ### 6. 配置 AI 总结（可选）
@@ -96,6 +97,7 @@ wrangler d1 execute blog-db --local --file=migrations/0003_pages.sql
 wrangler d1 execute blog-db --local --file=migrations/0004_ai_summary.sql
 wrangler d1 execute blog-db --local --file=migrations/0005_post_activities.sql
 wrangler d1 execute blog-db --local --file=migrations/0006_remove_user_system.sql
+wrangler d1 execute blog-db --local --file=migrations/0007_post_license.sql
 npm run dev
 ```
 
@@ -117,6 +119,10 @@ npm run dev
 
 保存文章时一次性调用 API 生成每块的总结并入库，之后渲染不再调用。编辑时若标记块内容未变则复用已有总结，变了才重新生成。
 
+## 文章协议
+
+新建或编辑文章时可单独选择许可协议，未选择时默认使用 `CC BY 4.0`。支持常用 CC 4.0 协议、CC0 1.0 和“保留所有权利”；文章详情页会显示当前协议，已发布文章修改协议时也会计入文章活动墙。
+
 ## 文件结构
 
 ```
@@ -131,6 +137,7 @@ migrations/
   0004_ai_summary.sql   posts 增加 ai_summary 列
   0005_post_activities.sql  文章发布与修改活动
   0006_remove_user_system.sql  删除旧用户与本地评论表
+  0007_post_license.sql  文章级许可协议
 wrangler.jsonc          云端部署配置（不含密钥）
 wrangler.toml           本地配置（Git 忽略）
 ```

@@ -2,6 +2,7 @@ import type { Context } from 'hono'
 import type { Env } from './index'
 import type { Post, PostActivity, PostActivityChanges } from './html'
 import { pinyin } from 'pinyin-pro'
+import { normalizeArticleLicense } from './licenses'
 
 function toSlug(title: string): string {
   const py = pinyin(title, { toneType: 'none', type: 'array' }).join('')
@@ -49,9 +50,9 @@ export async function adminListPosts(c: Context<{ Bindings: Env }>) {
   return results
 }
 
-export async function createPost(c: Context<{ Bindings: Env }>, title: string, body: string, aiSummary: string | null) {
+export async function createPost(c: Context<{ Bindings: Env }>, title: string, body: string, aiSummary: string | null, license: string) {
   const slug = toSlug(title)
-  await c.env.DB.prepare('INSERT INTO posts (title,slug,body,ai_summary) VALUES (?,?,?,?)').bind(title, slug, body, aiSummary).run()
+  await c.env.DB.prepare('INSERT INTO posts (title,slug,body,ai_summary,license) VALUES (?,?,?,?,?)').bind(title, slug, body, aiSummary, normalizeArticleLicense(license)).run()
   return slug
 }
 
@@ -81,19 +82,23 @@ function bodyChange(before: string, after: string): PostActivityChanges['body'] 
   return { removed: removed.text, added: added.text, truncated: removed.truncated || added.truncated }
 }
 
-export function describePostChanges(existing: Pick<Post, 'title' | 'body'>, title: string, body: string): PostActivityChanges {
+export function describePostChanges(existing: Pick<Post, 'title' | 'body' | 'license'>, title: string, body: string, license: string): PostActivityChanges {
   const changes: PostActivityChanges = {}
   if (existing.title !== title) changes.title = { before: existing.title, after: title }
   if (existing.body !== body) changes.body = bodyChange(existing.body, body)
+  const oldLicense = normalizeArticleLicense(existing.license)
+  const newLicense = normalizeArticleLicense(license)
+  if (oldLicense !== newLicense) changes.license = { before: oldLicense, after: newLicense }
   return changes
 }
 
-export async function updatePost(c: Context<{ Bindings: Env }>, existing: Post, title: string, body: string, aiSummary: string | null) {
-  const changes = describePostChanges(existing, title, body)
-  if (!changes.title && !changes.body) return false
+export async function updatePost(c: Context<{ Bindings: Env }>, existing: Post, title: string, body: string, aiSummary: string | null, license: string) {
+  const normalizedLicense = normalizeArticleLicense(license)
+  const changes = describePostChanges(existing, title, body, normalizedLicense)
+  if (!changes.title && !changes.body && !changes.license) return false
 
   const statements = [
-    c.env.DB.prepare('UPDATE posts SET title=?,body=?,ai_summary=? WHERE id=?').bind(title, body, aiSummary, existing.id)
+    c.env.DB.prepare('UPDATE posts SET title=?,body=?,ai_summary=?,license=? WHERE id=?').bind(title, body, aiSummary, normalizedLicense, existing.id)
   ]
   if (existing.published) {
     statements.push(c.env.DB.prepare(`

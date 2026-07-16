@@ -8,6 +8,7 @@
 - 管理后台：新建/编辑/删除/发布文章，删除评论
 - 管理员登录（单账号，env secret）
 - AI 总结：文章内 `[ai-summary]...[/ai-summary]` 标记的内容，发帖时一次性调用 OpenAI 协议 API 生成总结，渲染时原内容在上、AI 总结框在下
+- 全年文章活动墙：记录公开文章的发布和真实修改，点击日期可查看具体改动
 
 ## 部署
 
@@ -57,6 +58,7 @@ wrangler d1 execute blog-db --file=migrations/0001_init.sql
 wrangler d1 execute blog-db --file=migrations/0002_users.sql
 wrangler d1 execute blog-db --file=migrations/0003_pages.sql
 wrangler d1 execute blog-db --file=migrations/0004_ai_summary.sql
+wrangler d1 execute blog-db --file=migrations/0005_post_activities.sql
 ```
 
 ### 6. 配置 AI 总结（可选）
@@ -90,6 +92,7 @@ wrangler d1 execute blog-db --local --file=migrations/0001_init.sql
 wrangler d1 execute blog-db --local --file=migrations/0002_users.sql
 wrangler d1 execute blog-db --local --file=migrations/0003_pages.sql
 wrangler d1 execute blog-db --local --file=migrations/0004_ai_summary.sql
+wrangler d1 execute blog-db --local --file=migrations/0005_post_activities.sql
 wrangler dev
 ```
 
@@ -124,6 +127,7 @@ src/
 migrations/
   0001_init.sql         建表
   0004_ai_summary.sql   posts 增加 ai_summary 列
+  0005_post_activities.sql  文章发布与修改活动
 wrangler.toml           Workers 配置
 ```
 
@@ -136,6 +140,18 @@ https://你的域名/rss.xml
 ```
 
 也兼容 `https://你的域名/feed.xml`。将地址复制到 Feedly、Inoreader、Follow 等 RSS 阅读器即可订阅公开文章更新。
+
+## 折叠内容
+
+在 Markdown 中使用以下语法创建默认折叠的内容：
+
+```text
+[details="标题"]
+这里是折叠的 Markdown 内容。
+[/details]
+```
+
+页面会显示一个小箭头和双引号中的标题，点击后展开正文。
 
 ## Giscus 评论配置
 

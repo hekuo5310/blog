@@ -1,4 +1,10 @@
 export type Post = { id: number; title: string; slug: string; body: string; published: number; created_at: string; ai_summary?: string | null }
+export type PostActivityChanges = {
+  published?: boolean
+  title?: { before: string; after: string }
+  body?: { removed: string; added: string; truncated: boolean }
+}
+export type PostActivity = { id: number; post_id: number; post_title: string; post_slug: string; event_type: 'published' | 'updated'; changes: PostActivityChanges; created_at: string }
 export type Comment = { id: number; post_id: number; author: string; body: string; created_at: string; user_id: number | null }
 export type SiteConfig = { title: string; desc: string; navLinks: { label: string; url: string }[] }
 export type GiscusConfig = { repo: string; repoId: string; category: string; categoryId: string; mapping: string; strict: string; reactionsEnabled: string; emitMetadata: string; inputPosition: string; lang: string }
@@ -103,10 +109,13 @@ a:hover{opacity:.7}
 .heatmap{display:grid;grid-template-columns:auto 1fr;gap:.25rem;align-items:start}
 .hm-ylabels{display:flex;flex-direction:column;gap:2px;padding-top:18px;font-size:.7rem;color:var(--faint);width:1.5rem;text-align:right}
 .hm-grid{overflow-x:auto}
-.hm-months{display:flex;font-size:.7rem;color:var(--faint);gap:0;margin-bottom:3px}
-.hm-month{flex:1;min-width:0}
+.hm-months{display:grid;grid-auto-columns:10px;gap:2px;font-size:.7rem;color:var(--faint);margin-bottom:3px;min-height:12px}
+.hm-month{white-space:nowrap}
 .hm-cells{display:grid;grid-template-rows:repeat(7,10px);grid-auto-flow:column;grid-auto-columns:10px;gap:2px}
-.hm-cell{width:10px;height:10px;border-radius:2px;background:var(--hm-empty)}
+.hm-cell{display:block;width:10px;height:10px;border:0;border-radius:2px;padding:0;background:var(--hm-empty);font:inherit}
+.hm-cell[data-date]{cursor:pointer}
+.hm-cell[data-date]:hover,.hm-cell[data-date]:focus-visible{outline:1px solid var(--text);outline-offset:1px}
+.hm-cell[aria-pressed="true"]{outline:2px solid var(--text);outline-offset:1px}
 .hm-cell[data-l="1"]{background:var(--hm-1)}
 .hm-cell[data-l="2"]{background:var(--hm-2)}
 .hm-cell[data-l="3"]{background:var(--hm-3)}
@@ -115,6 +124,29 @@ a:hover{opacity:.7}
 .hm-legend .hm-cell{display:inline-block}
 .hm-year-button{background:none;border:none;cursor:pointer;font-size:.8rem;color:var(--faint);font-family:inherit}
 .hm-year-button.active{color:var(--text);font-weight:700}
+.hm-detail{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)}
+.hm-detail[hidden]{display:none}
+.hm-detail-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.5rem}
+.hm-detail-title{font-size:.92rem;font-weight:600;color:var(--text)}
+.hm-detail-close{border:0;background:none;color:var(--muted);cursor:pointer;font-size:1rem;line-height:1;padding:.2rem}
+.hm-empty-message{font-size:.88rem;color:var(--muted);padding:.5rem 0}
+.hm-event{padding:.8rem 0;border-bottom:1px solid var(--border-soft)}
+.hm-event:last-child{border-bottom:0}
+.hm-event-head{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.55rem}
+.hm-event-title{font-size:.92rem;font-weight:600;color:var(--text)}
+.hm-event-type{font-size:.72rem;padding:.1rem .4rem;border-radius:3px;background:var(--badge-bg);color:var(--badge-text)}
+.hm-event-time{font-size:.76rem;color:var(--faint);margin-left:auto}
+.hm-publish-note,.hm-change-title{font-size:.84rem;color:var(--muted);line-height:1.6}
+.hm-change-title del{color:var(--danger)}
+.hm-change-title ins{color:var(--hm-3);text-decoration:none}
+.hm-diff{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.55rem}
+.hm-diff-block{min-width:0}
+.hm-diff-label{display:block;font-size:.72rem;font-weight:600;margin-bottom:.25rem;color:var(--muted)}
+.hm-diff-block.removed .hm-diff-label{color:var(--danger)}
+.hm-diff-block.added .hm-diff-label{color:var(--hm-3)}
+.hm-diff-block pre{margin:0;padding:.55rem .65rem;border-radius:4px;background:var(--pre-bg);font-size:.76rem;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;max-height:14rem;overflow:auto}
+.hm-diff-note{font-size:.74rem;color:var(--faint);margin-top:.35rem}
+@media(max-width:600px){.hm-diff{grid-template-columns:1fr}.hm-event-time{width:100%;margin-left:0}}
 
 /* post list */
 .post-list{margin:1rem 0}
@@ -142,10 +174,16 @@ a:hover{opacity:.7}
 .footnotes li{margin:.4rem 0}
 .footnotes p{display:inline}
 .footnote-ref{font-size:.75em;vertical-align:super;line-height:0}
+.footnote-ref a,.footnotes li{scroll-margin-top:5rem}
 .footnote-backref{margin-left:.35rem;color:var(--accent)}
 .spoiler{display:inline;cursor:pointer;border-radius:3px;filter:blur(5px);transition:filter .15s ease,background-color .15s ease;background:color-mix(in srgb,var(--text) 14%,transparent)}
 .spoiler.revealed{filter:none;background:transparent}
 .spoiler:focus{outline:1px solid var(--accent);outline-offset:2px}
+.markdown-details{margin:.75rem 0}
+.markdown-details summary{cursor:pointer;font-weight:600;color:var(--text);line-height:1.5}
+.markdown-details-body{padding:.25rem 0 .25rem 1.25rem}
+.markdown-details-body>:first-child{margin-top:.5rem}
+.markdown-details-body>:last-child{margin-bottom:0}
 .ai-summary-block{margin:1rem 0}
 .ai-summary-box{margin-top:1rem;padding:.9rem 1.1rem;border:1px solid var(--input-border);border-left:3px solid var(--accent);border-radius:6px;background:var(--bg-soft)}
 .ai-summary-label{display:inline-block;font-size:.78rem;font-weight:600;color:var(--accent);margin-bottom:.4rem;letter-spacing:.03em}
@@ -212,7 +250,7 @@ th{font-weight:600;color:var(--muted);font-size:.8rem;text-transform:uppercase;l
 
 export function layout(title: string, body: string, adminNav = false, loggedInUsername?: string | null, cfg: SiteConfig = DEFAULT_CONFIG, updates: UpdateItem[] = []): string {
   const extraLinks = cfg.navLinks.map(l => `<a href="${esc(l.url)}">${esc(l.label)}</a>`).join('')
-  const subscribeToggle = `<a class="subscribe-toggle" href="/rss.xml" title="RSS 订阅">RSS</a>`
+  const subscribeToggle = `<button class="subscribe-toggle" type="button" id="subscribe-toggle" aria-pressed="false">订阅</button>`
   const themeToggle = `<button class="nav-icon theme-toggle" type="button" id="theme-toggle" aria-label="切换夜间模式" aria-pressed="false" title="切换夜间模式"><span class="theme-icon moon" aria-hidden="true"></span></button>`
   const updateJson = JSON.stringify(updates)
   const rightNav = adminNav
@@ -276,7 +314,6 @@ ${body}
   var titleEl=document.getElementById('update-toast-title');
   var rangeEl=document.getElementById('update-toast-range');
   var actionBtn=document.getElementById('update-toast-action');
-  var updatesEl=document.getElementById('update-data');
   function getCookie(name){
     return document.cookie.split('; ').reduce(function(found,part){
       if(found)return found;
@@ -292,7 +329,7 @@ ${body}
   }
   function toTime(value){
     if(!value)return NaN;
-    var normalized=value.indexOf(' ')>=0?value.replace(' ','T')+'Z':value;
+    var normalized=/^\d{4}-\d{2}-\d{2} \d{2}:/.test(value)?value.replace(' ','T')+'Z':value;
     return new Date(normalized).getTime();
   }
   function formatTime(value){
@@ -317,13 +354,23 @@ ${body}
     toast.classList.add('show');
   }
   function loadUpdates(){
-    var items=[];
-    if(updatesEl){
-      try{items=JSON.parse(updatesEl.textContent||'[]')}catch(e){items=[]}
-    }
-    if(items.length)return Promise.resolve(items);
-    return fetch('/updates.json',{headers:{Accept:'application/json'}})
-      .then(function(res){return res.ok?res.json():[]})
+    return fetch('/rss.xml',{headers:{Accept:'application/rss+xml'}})
+      .then(function(res){return res.ok?res.text():''})
+      .then(function(xml){
+        if(!xml)return [];
+        var doc=new DOMParser().parseFromString(xml,'application/xml');
+        if(doc.querySelector('parsererror'))return [];
+        return Array.prototype.map.call(doc.querySelectorAll('channel > item'),function(item){
+          var title=item.querySelector('title');
+          var link=item.querySelector('link');
+          var date=item.querySelector('pubDate');
+          return {
+            title:title?title.textContent||'':'',
+            url:link?link.textContent||'/':'/',
+            createdAt:date?date.textContent||'':''
+          };
+        });
+      })
       .catch(function(){return []});
   }
   function checkUpdates(){
@@ -360,17 +407,30 @@ ${body}
 }
 
 function excerpt(md: string, len = 120): string {
-  return md.replace(/[#*`_\[\]]/g, '').slice(0, len).trim() + (md.length > len ? '…' : '')
+  const text = md
+    .replace(/\[\/?ai-summary\]/gi, '')
+    .replace(/[#*`_\[\]]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return esc(text.slice(0, len)) + (text.length > len ? '…' : '')
 }
 
 const MARKDOWN_SCRIPT = `<script>
 (function(){
   if(window.renderMarkdown)return;
-  function escAttr(s){return String(s).replace(/[^a-zA-Z0-9_-]/g,'-');}
+  function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+  var renderId=0;
   window.renderMarkdown=function(md){
     var notes=[];
     var spoilers=[];
-    var text=String(md||'').replace(/\\[spoiler\\]([\\s\\S]*?)\\[\\/spoiler\\]/gi,function(_,body){
+    var details=[];
+    var prefix='md-'+(++renderId);
+    var text=String(md||'').replace(/\\[details\\s*=\\s*"([^"]*)"\\]([\\s\\S]*?)\\[\\/details\\]/gi,function(_,title,body){
+      var index=details.length;
+      details.push({title:title,body:body});
+      return '\\n\\n@@DETAILS_'+index+'@@\\n\\n';
+    });
+    text=text.replace(/\\[spoiler\\]([\\s\\S]*?)\\[\\/spoiler\\]/gi,function(_,body){
       var index=spoilers.length;
       spoilers.push(body);
       return '@@SPOILER_'+index+'@@';
@@ -378,8 +438,9 @@ const MARKDOWN_SCRIPT = `<script>
     text=text.replace(/\\^\\[([^\\]]+)\\]/g,function(_,body){
       notes.push(body);
       var number=notes.length;
-      var refId='fnref-'+number;
-      return '<sup class="footnote-ref"><a id="'+refId+'" href="#fn-'+number+'" data-footnote-ref aria-describedby="footnote-label">'+number+'</a></sup>';
+      var refId=prefix+'-fnref-'+number;
+      var noteId=prefix+'-fn-'+number;
+      return '<sup class="footnote-ref"><a id="'+refId+'" href="#'+noteId+'" data-footnote-ref aria-describedby="'+prefix+'-footnote-label">'+number+'</a></sup>';
     });
     var html=marked.parse(text,{breaks:true});
     html=html.replace(/@@SPOILER_(\\d+)@@/g,function(_,index){
@@ -387,12 +448,18 @@ const MARKDOWN_SCRIPT = `<script>
       var rendered=marked.parseInline?marked.parseInline(body):marked.parse(body,{breaks:true});
       return '<span class="spoiler" role="button" tabindex="0" aria-label="点击显示隐藏内容" onclick="this.classList.add(\\'revealed\\')" onkeydown="if(event.key===\\'Enter\\'||event.key===\\' \\'){event.preventDefault();this.classList.add(\\'revealed\\')}">'+rendered+'</span>';
     });
+    function renderDetails(index){
+      var item=details[Number(index)]||{title:'',body:''};
+      return '<details class="markdown-details"><summary>'+escHtml(item.title)+'</summary><div class="markdown-details-body">'+window.renderMarkdown(item.body.trim())+'</div></details>';
+    }
+    html=html.replace(/<p>@@DETAILS_(\\d+)@@<\\/p>/g,function(_,index){return renderDetails(index);});
+    html=html.replace(/@@DETAILS_(\\d+)@@/g,function(_,index){return renderDetails(index);});
     if(!notes.length)return html;
     var items=notes.map(function(body,index){
       var number=index+1;
-      return '<li id="fn-'+number+'">'+marked.parse(body,{breaks:true})+' <a class="footnote-backref" href="#fnref-'+number+'" aria-label="Back to content">Back</a></li>';
+      return '<li id="'+prefix+'-fn-'+number+'">'+marked.parse(body,{breaks:true})+' <a class="footnote-backref" href="#'+prefix+'-fnref-'+number+'" aria-label="返回脚注引用位置">↩</a></li>';
     }).join('');
-    return html+'<section class="footnotes" data-footnotes><h2 id="footnote-label" style="position:absolute;left:-9999px">Footnotes</h2><ol>'+items+'</ol></section>';
+    return html+'<section class="footnotes" data-footnotes><h2 id="'+prefix+'-footnote-label" style="position:absolute;left:-9999px">脚注</h2><ol>'+items+'</ol></section>';
   };
 })();
 </script>`
@@ -476,16 +543,12 @@ render();
 </script>`
 }
 
-function heatmap(posts: Post[]): string {
-  const dates = posts.map(p => p.created_at.slice(0, 10))
-  const years = [...new Set(dates.map(d => d.slice(0, 4)))].sort()
-  const datesJson = JSON.stringify(dates)
-  const yearsJson = JSON.stringify(years)
-
+function heatmap(activities: PostActivity[]): string {
+  const activitiesJson = JSON.stringify(activities).replace(/</g, '\\u003c')
   return `<div class="heatmap-wrap">
 <div class="heatmap-title">
-  <span>文章发布热力图</span>
-  <span id="hm-year-nav" style="display:flex;gap:.4rem;align-items:center"></span>
+  <span>文章发布与修改</span>
+  <span id="hm-year-nav" style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap"></span>
 </div>
 <div class="heatmap">
   <div class="hm-ylabels"><span></span><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span></div>
@@ -494,48 +557,101 @@ function heatmap(posts: Post[]): string {
     <div class="hm-cells" id="hm-cells"></div>
   </div>
 </div>
-<div class="hm-legend">少 <div class="hm-cell" data-l="0"></div><div class="hm-cell" data-l="1"></div><div class="hm-cell" data-l="2"></div><div class="hm-cell" data-l="3"></div><div class="hm-cell" data-l="4"></div> 多</div>
+<div class="hm-legend">少 <span class="hm-cell" data-l="0"></span><span class="hm-cell" data-l="1"></span><span class="hm-cell" data-l="2"></span><span class="hm-cell" data-l="3"></span><span class="hm-cell" data-l="4"></span> 多</div>
+<div class="hm-detail" id="hm-detail" hidden>
+  <div class="hm-detail-head"><h2 class="hm-detail-title" id="hm-detail-title"></h2><button class="hm-detail-close" id="hm-detail-close" type="button" title="关闭" aria-label="关闭">×</button></div>
+  <div id="hm-detail-events"></div>
+</div>
 </div>
 <script>
 (function(){
-const dates=${datesJson}, allYears=${yearsJson};
-const counts={};
-dates.forEach(d=>{counts[d]=(counts[d]||0)+1});
+const activities=${activitiesJson};
 const MONTHS=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-let curYear=new Date().getFullYear();
-if(!allYears.includes(String(curYear))&&allYears.length) curYear=Number(allYears[allYears.length-1]);
+const byDate={};
+activities.forEach(item=>{const key=item.created_at.slice(0,10);(byDate[key]||(byDate[key]=[])).push(item)});
+const activityYears=Object.keys(byDate).map(d=>d.slice(0,4));
+const allYears=[...new Set([...activityYears,String(new Date().getFullYear())])].sort();
+let curYear=Number(allYears[allYears.length-1]);
 
+function h(value){
+  return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function keyOf(date){
+  const pad=n=>String(n).padStart(2,'0');
+  return date.getFullYear()+'-'+pad(date.getMonth()+1)+'-'+pad(date.getDate());
+}
+function level(count){return count===0?0:count===1?1:count<=3?2:count<=5?3:4}
+function diffBlock(kind,label,value){
+  return '<div class="hm-diff-block '+kind+'"><span class="hm-diff-label">'+label+'</span><pre>'+h(value||'（无）')+'</pre></div>';
+}
+function eventHtml(item){
+  const changes=item.changes||{};
+  const type=item.event_type==='published'?'发布':'修改';
+  const time=item.created_at.length>=16?item.created_at.slice(11,16):'';
+  let detail='';
+  if(item.event_type==='published') detail='<p class="hm-publish-note">文章在这一天发布。</p>';
+  if(changes.title){
+    detail+='<p class="hm-change-title"><strong>标题：</strong><del>'+h(changes.title.before)+'</del> → <ins>'+h(changes.title.after)+'</ins></p>';
+  }
+  if(changes.body){
+    detail+='<div class="hm-diff">'+diffBlock('removed','删除',changes.body.removed)+diffBlock('added','新增',changes.body.added)+'</div>';
+    if(changes.body.truncated) detail+='<p class="hm-diff-note">改动较长，仅显示开头和结尾。</p>';
+  }
+  return '<article class="hm-event"><div class="hm-event-head"><a class="hm-event-title" href="/post/'+encodeURIComponent(item.post_slug)+'">'+h(item.post_title)+'</a><span class="hm-event-type">'+type+'</span><time class="hm-event-time">'+h(time)+'</time></div>'+detail+'</article>';
+}
+function showDate(key,button){
+  document.querySelectorAll('#hm-cells [aria-pressed="true"]').forEach(cell=>cell.setAttribute('aria-pressed','false'));
+  if(button)button.setAttribute('aria-pressed','true');
+  const items=byDate[key]||[];
+  const detail=document.getElementById('hm-detail');
+  document.getElementById('hm-detail-title').textContent=key+' · '+items.length+' 次活动';
+  document.getElementById('hm-detail-events').innerHTML=items.length?items.map(eventHtml).join(''):'<p class="hm-empty-message">当天没有文章发布或修改。</p>';
+  detail.hidden=false;
+}
 function render(year){
-  const start=new Date(year,0,1), startDay=start.getDay(), totalWeeks=53;
-  const cells=[], months=new Array(12).fill(-1);
+  const first=new Date(year,0,1);
+  const gridStart=new Date(year,0,1-first.getDay());
+  const last=new Date(year,11,31);
+  const totalWeeks=Math.floor((last-gridStart)/86400000/7)+1;
+  const cells=[];
   for(let w=0;w<totalWeeks;w++){
     for(let d=0;d<7;d++){
-      const date=new Date(year,0,1+w*7+d-startDay);
-      if(date.getFullYear()!==year){cells.push('<div class="hm-cell"></div>');continue;}
-      const key=date.toISOString().slice(0,10);
-      const c=counts[key]||0, l=c===0?0:c===1?1:c<=3?2:c<=5?3:4;
-      if(d===0&&months[date.getMonth()]===-1)months[date.getMonth()]=w;
-      cells.push('<div class="hm-cell" data-l="'+l+'" title="'+key+': '+c+'"></div>');
+      const date=new Date(gridStart);
+      date.setDate(gridStart.getDate()+w*7+d);
+      if(date.getFullYear()!==year){cells.push('<span class="hm-cell" aria-hidden="true"></span>');continue;}
+      const key=keyOf(date), count=(byDate[key]||[]).length;
+      cells.push('<button class="hm-cell" type="button" data-date="'+key+'" data-l="'+level(count)+'" aria-label="'+key+'，'+count+' 次活动" aria-pressed="false" title="'+key+': '+count+'"></button>');
     }
   }
-  document.getElementById('hm-cells').innerHTML=cells.join('');
-  document.getElementById('hm-months').innerHTML=MONTHS.map((m,i)=>{
-    const w=months[i];return w<0?'<span class="hm-month"></span>':'<span class="hm-month">'+m+'</span>';
-  }).join('');
+  const cellsEl=document.getElementById('hm-cells');
+  cellsEl.style.gridTemplateColumns='repeat('+totalWeeks+',10px)';
+  cellsEl.innerHTML=cells.join('');
+  cellsEl.querySelectorAll('[data-date]').forEach(cell=>cell.addEventListener('click',()=>showDate(cell.dataset.date,cell)));
 
-  // year nav
-  const allY=[...new Set([...allYears,String(new Date().getFullYear())])].sort();
-  document.getElementById('hm-year-nav').innerHTML=allY.map(y=>
-    '<button class="hm-year-button '+(Number(y)===year?'active':'')+'" onclick="hmYear('+y+')">'+y+'</button>'
-  ).join('');
+  const monthLabels=MONTHS.map((label,index)=>{
+    const date=new Date(year,index,1);
+    const week=Math.floor((date-gridStart)/86400000/7);
+    return '<span class="hm-month" style="grid-column:'+(week+1)+'/span 4">'+label+'</span>';
+  });
+  const monthsEl=document.getElementById('hm-months');
+  monthsEl.style.gridTemplateColumns='repeat('+totalWeeks+',10px)';
+  monthsEl.innerHTML=monthLabels.join('');
+
+  const nav=document.getElementById('hm-year-nav');
+  nav.innerHTML=allYears.map(y=>'<button class="hm-year-button '+(Number(y)===year?'active':'')+'" type="button" data-year="'+y+'">'+y+'</button>').join('');
+  nav.querySelectorAll('[data-year]').forEach(button=>button.addEventListener('click',()=>{curYear=Number(button.dataset.year);render(curYear)}));
+  document.getElementById('hm-detail').hidden=true;
 }
-window.hmYear=function(y){curYear=y;render(y)};
+document.getElementById('hm-detail-close').addEventListener('click',()=>{
+  document.getElementById('hm-detail').hidden=true;
+  document.querySelectorAll('#hm-cells [aria-pressed="true"]').forEach(cell=>cell.setAttribute('aria-pressed','false'));
+});
 render(curYear);
 })();
 </script>`
 }
 
-export function postList(posts: Post[], loggedInUsername?: string | null, cfg: SiteConfig = DEFAULT_CONFIG): string {
+export function postList(posts: Post[], activities: PostActivity[], loggedInUsername?: string | null, cfg: SiteConfig = DEFAULT_CONFIG): string {
   const items = posts.length
     ? posts.map(p => `<div class="post-item">
   <div class="post-date">${p.created_at.slice(0, 10)}</div>
@@ -545,7 +661,7 @@ export function postList(posts: Post[], loggedInUsername?: string | null, cfg: S
 
   const body = `<div class="wrap">
 <div class="hero"><h1>${esc(cfg.title)}<span class="cursor"></span></h1><p class="hero-desc">${esc(cfg.desc)}</p></div>
-${heatmap(posts)}
+${heatmap(activities)}
 <div class="post-list">${items}</div>
 </div>` 
   return layout(cfg.title, body, false, loggedInUsername, cfg, updateItems(posts))

@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
 import type { Env } from './index'
-import type { Post } from './html'
+import type { Post, PostActivity, PostActivityChanges } from './html'
 import { pinyin } from 'pinyin-pro'
 
 function toSlug(title: string): string {
@@ -18,6 +18,22 @@ function toSlug(title: string): string {
 export async function listPublicPosts(c: Context<{ Bindings: Env }>) {
   const { results } = await c.env.DB.prepare('SELECT * FROM posts WHERE published=1 ORDER BY created_at DESC').all<Post>()
   return results
+}
+
+type ActivityRow = Omit<PostActivity, 'changes'> & { changes: string }
+
+export async function listPublicPostActivities(c: Context<{ Bindings: Env }>) {
+  const { results } = await c.env.DB.prepare(`
+    SELECT a.* FROM post_activities a
+    JOIN posts p ON p.id=a.post_id
+    WHERE p.published=1
+    ORDER BY a.created_at ASC, a.id ASC
+  `).all<ActivityRow>()
+  return results.map(row => {
+    let changes: PostActivityChanges = {}
+    try { changes = JSON.parse(row.changes) } catch {}
+    return { ...row, changes } as PostActivity
+  })
 }
 
 export async function getPostBySlug(c: Context<{ Bindings: Env }>, slug: string) {
@@ -39,8 +55,54 @@ export async function createPost(c: Context<{ Bindings: Env }>, title: string, b
   return slug
 }
 
-export async function updatePost(c: Context<{ Bindings: Env }>, id: number, title: string, body: string, aiSummary: string | null) {
-  await c.env.DB.prepare('UPDATE posts SET title=?,body=?,ai_summary=? WHERE id=?').bind(title, body, aiSummary, id).run()
+function clipChange(value: string, maxLength = 2400): { text: string; truncated: boolean } {
+  if (value.length <= maxLength) return { text: value, truncated: false }
+  const half = Math.floor(maxLength / 2)
+  return { text: `${value.slice(0, half)}\n...\n${value.slice(-half)}`, truncated: true }
+}
+
+function bodyChange(before: string, after: string): PostActivityChanges['body'] {
+  let start = 0
+  const maxStart = Math.min(before.length, after.length)
+  while (start < maxStart && before[start] === after[start]) start++
+
+  let beforeEnd = before.length
+  let afterEnd = after.length
+  while (beforeEnd > start && afterEnd > start && before[beforeEnd - 1] === after[afterEnd - 1]) {
+    beforeEnd--
+    afterEnd--
+  }
+
+  const lineStart = before.lastIndexOf('\n', Math.max(0, start - 1)) + 1
+  const beforeLineEnd = before.indexOf('\n', beforeEnd)
+  const afterLineEnd = after.indexOf('\n', afterEnd)
+  const removed = clipChange(before.slice(lineStart, beforeLineEnd < 0 ? before.length : beforeLineEnd))
+  const added = clipChange(after.slice(lineStart, afterLineEnd < 0 ? after.length : afterLineEnd))
+  return { removed: removed.text, added: added.text, truncated: removed.truncated || added.truncated }
+}
+
+export function describePostChanges(existing: Pick<Post, 'title' | 'body'>, title: string, body: string): PostActivityChanges {
+  const changes: PostActivityChanges = {}
+  if (existing.title !== title) changes.title = { before: existing.title, after: title }
+  if (existing.body !== body) changes.body = bodyChange(existing.body, body)
+  return changes
+}
+
+export async function updatePost(c: Context<{ Bindings: Env }>, existing: Post, title: string, body: string, aiSummary: string | null) {
+  const changes = describePostChanges(existing, title, body)
+  if (!changes.title && !changes.body) return false
+
+  const statements = [
+    c.env.DB.prepare('UPDATE posts SET title=?,body=?,ai_summary=? WHERE id=?').bind(title, body, aiSummary, existing.id)
+  ]
+  if (existing.published) {
+    statements.push(c.env.DB.prepare(`
+      INSERT INTO post_activities (post_id,post_title,post_slug,event_type,changes)
+      VALUES (?,?,?,?,?)
+    `).bind(existing.id, title, existing.slug, 'updated', JSON.stringify(changes)))
+  }
+  await c.env.DB.batch(statements)
+  return true
 }
 
 export async function deletePost(c: Context<{ Bindings: Env }>, id: number) {
@@ -48,5 +110,18 @@ export async function deletePost(c: Context<{ Bindings: Env }>, id: number) {
 }
 
 export async function togglePublish(c: Context<{ Bindings: Env }>, id: number) {
-  await c.env.DB.prepare('UPDATE posts SET published=1-published WHERE id=?').bind(id).run()
+  const post = await getPostById(c, id)
+  if (!post) return false
+  if (post.published) {
+    await c.env.DB.prepare('UPDATE posts SET published=0 WHERE id=?').bind(id).run()
+  } else {
+    await c.env.DB.batch([
+      c.env.DB.prepare('UPDATE posts SET published=1 WHERE id=?').bind(id),
+      c.env.DB.prepare(`
+        INSERT INTO post_activities (post_id,post_title,post_slug,event_type,changes)
+        VALUES (?,?,?,?,?)
+      `).bind(post.id, post.title, post.slug, 'published', JSON.stringify({ published: true }))
+    ])
+  }
+  return true
 }

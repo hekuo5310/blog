@@ -5,7 +5,7 @@ import type { GiscusConfig, SiteConfig, Post } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish } from './pages'
 import { createSession, validateSession, deleteSession, sessionCookie, clearCookie } from './auth'
 import { hashPassword, createUserSession, getUserFromSession, deleteUserSession, userSessionCookie, clearUserCookie } from './user-auth'
-import { listPublicPosts, getPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish } from './posts'
+import { listPublicPosts, listPublicPostActivities, getPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish } from './posts'
 import { getComments, addComment, deleteComment } from './comments'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries } from './ai-summary'
@@ -102,8 +102,8 @@ app.use('/admin/*', async (c, next) => {
 app.get('/images/*', serveImage)
 
 app.get('/', async (c) => {
-  const [posts, user, cfg] = await Promise.all([listPublicPosts(c), getLoggedInUser(c), getConfig(c.env)])
-  return c.html(postList(posts, user?.username, cfg))
+  const [posts, activities, user, cfg] = await Promise.all([listPublicPosts(c), listPublicPostActivities(c), getLoggedInUser(c), getConfig(c.env)])
+  return c.html(postList(posts, activities, user?.username, cfg))
 })
 
 app.get('/updates.json', async (c) => {
@@ -257,7 +257,7 @@ app.post('/admin/post/:id', async (c) => {
       summaries = await generateSummaries(c.env, newBlocks)
     }
   }
-  await updatePost(c, id, title, body, newBlocks.length ? JSON.stringify(summaries) : null)
+  await updatePost(c, existing, title, body, newBlocks.length ? JSON.stringify(summaries) : null)
   await deleteRemovedImages(c.env, existing.body, body)
   return c.redirect('/admin')
 })

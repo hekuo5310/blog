@@ -3,8 +3,8 @@ import type { Context } from 'hono'
 import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, DEFAULT_CONFIG } from './html'
 import type { GiscusConfig, SiteConfig, Post } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish } from './pages'
-import { createSession, validateSession, deleteSession, sessionCookie, clearCookie } from './auth'
-import { listPublicPosts, listPublicPostActivities, getPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish } from './posts'
+import { createSession, validateSession, deleteSession, sessionCookie, clearCookie, isLoginRateLimited, recordLoginFailure, clearLoginFailures } from './auth'
+import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish } from './posts'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries } from './ai-summary'
 import { normalizeArticleLicenseInput } from './licenses'
@@ -27,6 +27,14 @@ export type Env = {
 }
 
 const app = new Hono<{ Bindings: Env }>()
+
+app.use('*', async (c, next) => {
+  await next()
+  c.header('X-Content-Type-Options', 'nosniff')
+  c.header('X-Frame-Options', 'SAMEORIGIN')
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+})
 
 async function getConfig(env: Env): Promise<SiteConfig> {
   const raw = await env.SESSIONS.get('site:config')
@@ -105,8 +113,14 @@ app.get('/updates.json', async (c) => {
 app.get('/rss.xml', rssFeed)
 app.get('/feed.xml', rssFeed)
 
+app.get('/healthz', async (c) => {
+  await c.env.DB.prepare('SELECT 1').first()
+  c.header('Cache-Control', 'no-store')
+  return c.json({ ok: true })
+})
+
 app.get('/post/:slug', async (c) => {
-  const post = await getPostBySlug(c, c.req.param('slug'))
+  const post = await getPublishedPostBySlug(c, c.req.param('slug'))
   if (!post) return c.notFound()
   const cfg = await getConfig(c.env)
   return c.html(postDetail(post, cfg, getGiscusConfig(c.env)))
@@ -123,12 +137,17 @@ app.get('/privacy', async (c) => {
 // admin auth
 app.get('/admin/login', (c) => c.html(loginPage()))
 app.post('/admin/login', async (c) => {
+  if (await isLoginRateLimited(c)) {
+    return c.html(loginPage('登录尝试过多，请在 15 分钟后重试'), 429, { 'Retry-After': '900' })
+  }
   const form = await c.req.formData()
   const username = form.get('username') as string
   const password = form.get('password') as string
   if (username !== c.env.ADMIN_USER || password !== c.env.ADMIN_PASS) {
+    await recordLoginFailure(c)
     return c.html(loginPage('用户名或密码错误'), 401)
   }
+  await clearLoginFailures(c)
   const token = await createSession(c.env)
   return new Response(null, { status: 302, headers: { Location: '/admin', 'Set-Cookie': sessionCookie(token) } })
 })
@@ -169,8 +188,8 @@ app.get('/admin', async (c) => {
 app.get('/admin/post/new', (c) => c.html(postForm()))
 app.post('/admin/post', async (c) => {
   const form = await c.req.formData()
-  const title = (form.get('title') as string ?? '').trim()
-  const body = (form.get('body') as string ?? '').replace(/\r\n/g,'\n').trim()
+  const title = (form.get('title') as string ?? '').trim().slice(0, 200)
+  const body = (form.get('body') as string ?? '').replace(/\r\n/g,'\n').trim().slice(0, 200000)
   const license = normalizeArticleLicenseInput(form.get('license'), form.get('custom_license_name'), form.get('custom_license_text'))
   if (!title || !body) return c.redirect('/admin/post/new')
   const blocks = extractAiSummaryBlocks(body)
@@ -190,8 +209,8 @@ app.post('/admin/post/:id', async (c) => {
   const existing = await getPostById(c, id)
   if (!existing) return c.notFound()
   const form = await c.req.formData()
-  const title = (form.get('title') as string ?? '').trim()
-  const body = (form.get('body') as string ?? '').replace(/\r\n/g,'\n').trim()
+  const title = (form.get('title') as string ?? '').trim().slice(0, 200)
+  const body = (form.get('body') as string ?? '').replace(/\r\n/g,'\n').trim().slice(0, 200000)
   const license = normalizeArticleLicenseInput(form.get('license'), form.get('custom_license_name'), form.get('custom_license_text'))
   if (!title || !body) return c.redirect(`/admin/post/${c.req.param('id')}/edit`)
   const newBlocks = extractAiSummaryBlocks(body)

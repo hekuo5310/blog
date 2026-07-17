@@ -38,8 +38,8 @@ export async function listPublicPostActivities(c: Context<{ Bindings: Env }>) {
   })
 }
 
-export async function getPostBySlug(c: Context<{ Bindings: Env }>, slug: string) {
-  return c.env.DB.prepare('SELECT * FROM posts WHERE slug=?').bind(slug).first<Post>()
+export async function getPublishedPostBySlug(c: Context<{ Bindings: Env }>, slug: string) {
+  return c.env.DB.prepare('SELECT * FROM posts WHERE slug=? AND published=1').bind(slug).first<Post>()
 }
 
 export async function getPostById(c: Context<{ Bindings: Env }>, id: number) {
@@ -52,7 +52,12 @@ export async function adminListPosts(c: Context<{ Bindings: Env }>) {
 }
 
 export async function createPost(c: Context<{ Bindings: Env }>, title: string, body: string, aiSummary: string | null, license: ArticleLicenseInput) {
-  const slug = toSlug(title)
+  const baseSlug = toSlug(title)
+  let slug = baseSlug
+  let suffix = 2
+  while (await c.env.DB.prepare('SELECT 1 FROM posts WHERE slug=?').bind(slug).first()) {
+    slug = `${baseSlug}-${suffix++}`
+  }
   const normalized = normalizeArticleLicenseInput(license.license, license.customName, license.customText)
   await c.env.DB.prepare('INSERT INTO posts (title,slug,body,ai_summary,license,custom_license_name,custom_license_text) VALUES (?,?,?,?,?,?,?)')
     .bind(title, slug, body, aiSummary, normalized.license, normalized.customName, normalized.customText).run()

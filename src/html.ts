@@ -252,7 +252,7 @@ export function layout(title: string, body: string, adminNav = false, _loggedInU
   const rightNav = adminNav
     ? `<div class="nav-links"><a href="/admin">管理</a><a href="/admin/post/new">新建</a><a href="/admin/settings">设置</a>${themeToggle}<form method="post" action="/admin/logout" style="display:inline"><button class="nav-icon">退出</button></form></div>`
     : `<div class="nav-links">${extraLinks}${subscribeToggle}${themeToggle}</div>`
-  return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="alternate" type="application/rss+xml" title="${esc(cfg.title)} RSS" href="/rss.xml"><title>${title} — ${esc(cfg.title)}</title><script>
+  return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(cfg.desc)}"><link rel="alternate" type="application/rss+xml" title="${esc(cfg.title)} RSS" href="/rss.xml"><title>${esc(title)} — ${esc(cfg.title)}</title><script>
 (function(){
   var saved=localStorage.getItem('theme');
   var systemDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -413,6 +413,19 @@ const MARKDOWN_SCRIPT = `<script>
 (function(){
   if(window.renderMarkdown)return;
   function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+  function sanitize(html){return window.DOMPurify?window.DOMPurify.sanitize(html,{USE_PROFILES:{html:true}}):'<pre>'+escHtml(html)+'</pre>';}
+  if(!window.__blogSpoilersBound){
+    window.__blogSpoilersBound=true;
+    document.addEventListener('click',function(event){
+      var target=event.target instanceof Element?event.target.closest('[data-spoiler]'):null;
+      if(target)target.classList.add('revealed');
+    });
+    document.addEventListener('keydown',function(event){
+      if(event.key!=='Enter'&&event.key!==' ')return;
+      var target=event.target instanceof Element?event.target.closest('[data-spoiler]'):null;
+      if(target){event.preventDefault();target.classList.add('revealed');}
+    });
+  }
   var renderId=0;
   window.renderMarkdown=function(md){
     var notes=[];
@@ -440,7 +453,7 @@ const MARKDOWN_SCRIPT = `<script>
     html=html.replace(/@@SPOILER_(\\d+)@@/g,function(_,index){
       var body=spoilers[Number(index)]||'';
       var rendered=marked.parseInline?marked.parseInline(body):marked.parse(body,{breaks:true});
-      return '<span class="spoiler" role="button" tabindex="0" aria-label="点击显示隐藏内容" onclick="this.classList.add(\\'revealed\\')" onkeydown="if(event.key===\\'Enter\\'||event.key===\\' \\'){event.preventDefault();this.classList.add(\\'revealed\\')}">'+rendered+'</span>';
+      return '<span class="spoiler" role="button" tabindex="0" data-spoiler aria-label="点击显示隐藏内容">'+rendered+'</span>';
     });
     function renderDetails(index){
       var item=details[Number(index)]||{title:'',body:''};
@@ -448,12 +461,12 @@ const MARKDOWN_SCRIPT = `<script>
     }
     html=html.replace(/<p>@@DETAILS_(\\d+)@@<\\/p>/g,function(_,index){return renderDetails(index);});
     html=html.replace(/@@DETAILS_(\\d+)@@/g,function(_,index){return renderDetails(index);});
-    if(!notes.length)return html;
+    if(!notes.length)return sanitize(html);
     var items=notes.map(function(body,index){
       var number=index+1;
       return '<li id="'+prefix+'-fn-'+number+'">'+marked.parse(body,{breaks:true})+' <a class="footnote-backref" href="#'+prefix+'-fnref-'+number+'" aria-label="返回脚注引用位置">↩</a></li>';
     }).join('');
-    return html+'<section class="footnotes" data-footnotes><h2 id="'+prefix+'-footnote-label" style="position:absolute;left:-9999px">脚注</h2><ol>'+items+'</ol></section>';
+    return sanitize(html+'<section class="footnotes" data-footnotes><h2 id="'+prefix+'-footnote-label" style="position:absolute;left:-9999px">脚注</h2><ol>'+items+'</ol></section>');
   };
 })();
 </script>`
@@ -492,7 +505,8 @@ ${titleField}
   </div>
   <div class="preview-pane" id="md-prev"></div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@18.0.6/lib/marked.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
 ${MARKDOWN_SCRIPT}
 <script>
 (function(){
@@ -681,12 +695,13 @@ export function postDetail(post: Post, cfg: SiteConfig = DEFAULT_CONFIG, giscus?
 <h1>${esc(post.title)}</h1>
 <div class="article-meta">${post.created_at.slice(0, 10)} · 协议：${licenseHtml}</div>
 <div class="article-body" id="post-body"></div>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@18.0.6/lib/marked.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
 ${MARKDOWN_SCRIPT}
 <script>
 (function(){
-var raw=${JSON.stringify(post.body)};
-var summaries=${JSON.stringify(summaries)};
+var raw=${jsonForScript(post.body)};
+var summaries=${jsonForScript(summaries)};
 var re=/\\[ai-summary\\]([\\s\\S]*?)\\[\\/ai-summary\\]/g;
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 var out='',last=0,m,i=0;
@@ -803,9 +818,10 @@ export function pageDetail(page: PageItem, cfg: SiteConfig = DEFAULT_CONFIG): st
   const body = `<div class="wrap"><div class="article">
 <h1>${esc(page.title)}</h1>
 <div class="article-body" id="post-body"></div>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@18.0.6/lib/marked.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
 ${MARKDOWN_SCRIPT}
-<script>document.getElementById('post-body').innerHTML=window.renderMarkdown(${JSON.stringify(page.body)});</script>
+<script>document.getElementById('post-body').innerHTML=window.renderMarkdown(${jsonForScript(page.body)});</script>
 </div></div>`
   return layout(page.title, body, false, undefined, cfg)
 }
@@ -926,4 +942,11 @@ ${saved ? '<p style="color:green;margin-bottom:1rem">已保存</p>' : ''}
 
 function esc(s: string): string {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+
+function jsonForScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
 }

@@ -9,7 +9,6 @@ const EXT_BY_TYPE: Record<string, string> = {
   'image/png': 'png',
   'image/gif': 'gif',
   'image/webp': 'webp',
-  'image/svg+xml': 'svg',
   'image/avif': 'avif'
 }
 
@@ -20,13 +19,13 @@ export async function uploadImage(c: Context<{ Bindings: Env }>) {
     return c.json({ error: 'missing image' }, 400)
   }
   const file = entry as File
-  if (!file.type.startsWith('image/')) return c.json({ error: 'not an image' }, 400)
+  const ext = EXT_BY_TYPE[file.type]
+  if (!ext) return c.json({ error: 'unsupported image type' }, 415)
   if (file.size > MAX_IMAGE_SIZE) return c.json({ error: 'image too large' }, 413)
 
   const now = new Date()
   const yyyy = now.getUTCFullYear()
   const mm = String(now.getUTCMonth() + 1).padStart(2, '0')
-  const ext = EXT_BY_TYPE[file.type] ?? 'bin'
   const key = `uploads/${yyyy}/${mm}/${crypto.randomUUID()}.${ext}`
   await c.env.IMAGES.put(key, await file.arrayBuffer(), {
     httpMetadata: { contentType: file.type },
@@ -46,6 +45,7 @@ export async function serveImage(c: Context<{ Bindings: Env }>) {
   object.writeHttpMetadata(headers)
   headers.set('etag', object.httpEtag)
   headers.set('cache-control', 'public, max-age=31536000, immutable')
+  headers.set('x-content-type-options', 'nosniff')
   return new Response(object.body, { headers })
 }
 

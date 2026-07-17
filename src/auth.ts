@@ -1,6 +1,9 @@
 import type { Context } from 'hono'
 import type { Env } from './index'
 
+const LOGIN_ATTEMPT_LIMIT = 5
+const LOGIN_ATTEMPT_TTL = 15 * 60
+
 export function getCookie(req: Request, name: string): string | undefined {
   const header = req.headers.get('Cookie') ?? ''
   for (const part of header.split(';')) {
@@ -33,4 +36,26 @@ export function sessionCookie(token: string): string {
 
 export function clearCookie(): string {
   return `session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`
+}
+
+async function loginAttemptKey(c: Context<{ Bindings: Env }>): Promise<string> {
+  const source = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || 'unknown'
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source))
+  const id = [...new Uint8Array(digest)].slice(0, 12).map(byte => byte.toString(16).padStart(2, '0')).join('')
+  return `admin:login-attempts:${id}`
+}
+
+export async function isLoginRateLimited(c: Context<{ Bindings: Env }>): Promise<boolean> {
+  const attempts = Number(await c.env.SESSIONS.get(await loginAttemptKey(c)) || 0)
+  return attempts >= LOGIN_ATTEMPT_LIMIT
+}
+
+export async function recordLoginFailure(c: Context<{ Bindings: Env }>): Promise<void> {
+  const key = await loginAttemptKey(c)
+  const attempts = Number(await c.env.SESSIONS.get(key) || 0)
+  await c.env.SESSIONS.put(key, String(attempts + 1), { expirationTtl: LOGIN_ATTEMPT_TTL })
+}
+
+export async function clearLoginFailures(c: Context<{ Bindings: Env }>): Promise<void> {
+  await c.env.SESSIONS.delete(await loginAttemptKey(c))
 }

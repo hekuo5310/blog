@@ -10,6 +10,8 @@
 - 无公开用户系统，评论身份验证由 GitHub/Giscus 提供
 - AI 总结：文章内 `[ai-summary]...[/ai-summary]` 标记的内容，发帖时一次性调用 OpenAI 协议 API 生成总结，渲染时原内容在上、AI 总结框在下
 - 全年文章活动墙：记录公开文章的发布和真实修改，点击日期可查看具体改动
+- 安全渲染：Markdown 经 DOMPurify 清洗，草稿仅后台可见，管理员登录带失败次数限制
+- 健康检查：`/healthz`
 
 ## 部署
 
@@ -104,6 +106,12 @@ npm run dev
 ```
 
 本地访问 `http://localhost:8787`，管理后台 `/admin/login`。
+
+提交前可运行完整检查：
+
+```bash
+npm run check
+```
 
 ## AI 总结用法
 

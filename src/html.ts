@@ -1,11 +1,11 @@
-import { ARTICLE_LICENSES, DEFAULT_ARTICLE_LICENSE, getArticleLicense } from './licenses'
+import { ARTICLE_LICENSES, CUSTOM_ARTICLE_LICENSE, DEFAULT_ARTICLE_LICENSE, articleLicenseDisplayName, getArticleLicense } from './licenses'
 
-export type Post = { id: number; title: string; slug: string; body: string; published: number; created_at: string; ai_summary?: string | null; license?: string | null }
+export type Post = { id: number; title: string; slug: string; body: string; published: number; created_at: string; ai_summary?: string | null; license?: string | null; custom_license_name?: string | null; custom_license_text?: string | null }
 export type PostActivityChanges = {
   published?: boolean
   title?: { before: string; after: string }
   body?: { removed: string; added: string; truncated: boolean }
-  license?: { before: string; after: string }
+  license?: { before: string; after: string; customTextChanged?: boolean }
 }
 export type PostActivity = { id: number; post_id: number; post_title: string; post_slug: string; event_type: 'published' | 'updated'; changes: PostActivityChanges; created_at: string }
 export type SiteConfig = { title: string; desc: string; navLinks: { label: string; url: string }[] }
@@ -162,6 +162,9 @@ a:hover{opacity:.7}
 .article h1{font-size:2rem;font-weight:700;margin-bottom:.5rem}
 .article-meta{color:var(--faint);font-size:.85rem;margin-bottom:2rem}
 .article-meta a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.custom-license{margin-top:2rem;padding:1rem 1.1rem;border-left:3px solid var(--input-border);background:var(--bg-soft)}
+.custom-license h2{font-size:1rem;margin-bottom:.65rem}
+.custom-license-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.86rem;line-height:1.65;color:var(--muted)}
 .article-body{line-height:1.8;font-size:1rem;color:var(--text-soft)}
 .article-body h1,.article-body h2,.article-body h3{margin:1.5rem 0 .5rem;font-weight:600}
 .article-body p{margin:.75rem 0}
@@ -589,6 +592,7 @@ function eventHtml(item){
   }
   if(changes.license){
     detail+='<p class="hm-change-title"><strong>协议：</strong><del>'+h(changes.license.before)+'</del> → <ins>'+h(changes.license.after)+'</ins></p>';
+    if(changes.license.customTextChanged) detail+='<p class="hm-diff-note">自定义协议正文已修改。</p>';
   }
   return '<article class="hm-event"><div class="hm-event-head"><a class="hm-event-title" href="/post/'+encodeURIComponent(item.post_slug)+'">'+h(item.post_title)+'</a><span class="hm-event-type">'+type+'</span><time class="hm-event-time">'+h(time)+'</time></div>'+detail+'</article>';
 }
@@ -665,9 +669,13 @@ export function postDetail(post: Post, cfg: SiteConfig = DEFAULT_CONFIG, giscus?
   try { const a = post.ai_summary ? JSON.parse(post.ai_summary) : []; summaries = Array.isArray(a) ? a.map((s: any) => typeof s === 'string' ? s : '') : [] } catch { summaries = [] }
   const giscusComments = giscusWidget(giscus)
   const articleLicense = getArticleLicense(post.license)
+  const licenseDisplayName = articleLicenseDisplayName(articleLicense.value, post.custom_license_name)
   const licenseHtml = articleLicense.url
-    ? `<a href="${articleLicense.url}" rel="license">${esc(articleLicense.value)}</a>`
-    : esc(articleLicense.label)
+    ? `<a href="${articleLicense.url}" rel="license">${esc(licenseDisplayName)}</a>`
+    : esc(licenseDisplayName)
+  const customLicenseBlock = articleLicense.value === CUSTOM_ARTICLE_LICENSE && post.custom_license_text
+    ? `<section class="custom-license"><h2>${esc(licenseDisplayName)}</h2><div class="custom-license-text">${esc(post.custom_license_text)}</div></section>`
+    : ''
 
   const body = `<div class="wrap"><div class="article">
 <h1>${esc(post.title)}</h1>
@@ -694,6 +702,7 @@ out+=window.renderMarkdown(raw.slice(last));
 document.getElementById('post-body').innerHTML=out;
 })();
 </script>
+${customLicenseBlock}
 <div class="comments">
   ${giscusComments}
 </div>
@@ -875,15 +884,28 @@ function legalPage(title: string, content: string, cfg: SiteConfig): string {
 export function postForm(post?: Post): string {
   const action = post ? `/admin/post/${post.id}` : '/admin/post'
   const selectedLicense = getArticleLicense(post?.license ?? DEFAULT_ARTICLE_LICENSE).value
-  const licenseOptions = ARTICLE_LICENSES.map(license => `<option value="${esc(license.value)}"${license.value === selectedLicense ? ' selected' : ''}>${esc(license.label)}</option>`).join('')
+  const optionHtml = (group: (typeof ARTICLE_LICENSES)[number]['group']) => ARTICLE_LICENSES
+    .filter(license => license.group === group)
+    .map(license => `<option value="${esc(license.value)}"${license.value === selectedLicense ? ' selected' : ''}>${esc(license.label)}</option>`).join('')
+  const licenseOptions = `<optgroup label="Creative Commons">${optionHtml('creative-commons')}</optgroup><optgroup label="软件开源协议">${optionHtml('software')}</optgroup><optgroup label="其他">${optionHtml('other')}</optgroup>`
+  const customSelected = selectedLicense === CUSTOM_ARTICLE_LICENSE
   return layout(post ? '编辑文章' : '新建文章', `<div class="admin-wrap"><h1>${post ? '编辑文章' : '新建文章'}</h1>
 <form method="post" action="${action}" id="pf">
   ${editorWidget(post?.title ?? '', post?.body ?? '', false)}
   <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">文章协议
-    <select class="pf-input" name="license" style="margin-top:.35rem">${licenseOptions}</select>
+    <select class="pf-input" id="article-license" name="license" style="margin-top:.35rem">${licenseOptions}</select>
   </label>
+  <div id="custom-license-fields"${customSelected ? '' : ' hidden'} style="margin-top:.75rem">
+    <label style="display:block;font-size:.85rem;color:var(--muted)">自定义协议名称
+      <input class="pf-input" name="custom_license_name" maxlength="120" value="${esc(post?.custom_license_name ?? '')}" style="margin-top:.35rem" placeholder="例如：站点文章共享协议">
+    </label>
+    <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">自定义协议正文
+      <textarea class="pf-input" name="custom_license_text" maxlength="20000" rows="10" style="margin-top:.35rem;resize:vertical" placeholder="填写完整许可条款">${esc(post?.custom_license_text ?? '')}</textarea>
+    </label>
+  </div>
   <div style="margin-top:.75rem"><button class="btn" type="submit">保存</button></div>
-</form></div>`, true)
+</form></div>
+<script>(function(){var select=document.getElementById('article-license'),fields=document.getElementById('custom-license-fields');if(!select||!fields)return;function sync(){fields.hidden=select.value!=='${CUSTOM_ARTICLE_LICENSE}'}select.addEventListener('change',sync);sync()})();</script>`, true)
 }
 
 export function settingsPage(cfg: SiteConfig, saved = false): string {

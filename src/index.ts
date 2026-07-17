@@ -7,7 +7,7 @@ import { createSession, validateSession, deleteSession, sessionCookie, clearCook
 import { listPublicPosts, listPublicPostActivities, getPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish } from './posts'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries } from './ai-summary'
-import { normalizeArticleLicense } from './licenses'
+import { normalizeArticleLicenseInput } from './licenses'
 
 export type Env = {
   DB: D1Database
@@ -171,7 +171,7 @@ app.post('/admin/post', async (c) => {
   const form = await c.req.formData()
   const title = (form.get('title') as string ?? '').trim()
   const body = (form.get('body') as string ?? '').replace(/\r\n/g,'\n').trim()
-  const license = normalizeArticleLicense(form.get('license'))
+  const license = normalizeArticleLicenseInput(form.get('license'), form.get('custom_license_name'), form.get('custom_license_text'))
   if (!title || !body) return c.redirect('/admin/post/new')
   const blocks = extractAiSummaryBlocks(body)
   const summaries = blocks.length ? await generateSummaries(c.env, blocks) : []
@@ -192,7 +192,7 @@ app.post('/admin/post/:id', async (c) => {
   const form = await c.req.formData()
   const title = (form.get('title') as string ?? '').trim()
   const body = (form.get('body') as string ?? '').replace(/\r\n/g,'\n').trim()
-  const license = normalizeArticleLicense(form.get('license'))
+  const license = normalizeArticleLicenseInput(form.get('license'), form.get('custom_license_name'), form.get('custom_license_text'))
   if (!title || !body) return c.redirect(`/admin/post/${c.req.param('id')}/edit`)
   const newBlocks = extractAiSummaryBlocks(body)
   let summaries: string[] = []

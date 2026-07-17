@@ -2,7 +2,8 @@ import type { Context } from 'hono'
 import type { Env } from './index'
 import type { Post, PostActivity, PostActivityChanges } from './html'
 import { pinyin } from 'pinyin-pro'
-import { normalizeArticleLicense } from './licenses'
+import type { ArticleLicenseInput } from './licenses'
+import { CUSTOM_ARTICLE_LICENSE, articleLicenseDisplayName, normalizeArticleLicense, normalizeArticleLicenseInput } from './licenses'
 
 function toSlug(title: string): string {
   const py = pinyin(title, { toneType: 'none', type: 'array' }).join('')
@@ -50,9 +51,11 @@ export async function adminListPosts(c: Context<{ Bindings: Env }>) {
   return results
 }
 
-export async function createPost(c: Context<{ Bindings: Env }>, title: string, body: string, aiSummary: string | null, license: string) {
+export async function createPost(c: Context<{ Bindings: Env }>, title: string, body: string, aiSummary: string | null, license: ArticleLicenseInput) {
   const slug = toSlug(title)
-  await c.env.DB.prepare('INSERT INTO posts (title,slug,body,ai_summary,license) VALUES (?,?,?,?,?)').bind(title, slug, body, aiSummary, normalizeArticleLicense(license)).run()
+  const normalized = normalizeArticleLicenseInput(license.license, license.customName, license.customText)
+  await c.env.DB.prepare('INSERT INTO posts (title,slug,body,ai_summary,license,custom_license_name,custom_license_text) VALUES (?,?,?,?,?,?,?)')
+    .bind(title, slug, body, aiSummary, normalized.license, normalized.customName, normalized.customText).run()
   return slug
 }
 
@@ -82,23 +85,33 @@ function bodyChange(before: string, after: string): PostActivityChanges['body'] 
   return { removed: removed.text, added: added.text, truncated: removed.truncated || added.truncated }
 }
 
-export function describePostChanges(existing: Pick<Post, 'title' | 'body' | 'license'>, title: string, body: string, license: string): PostActivityChanges {
+export function describePostChanges(existing: Pick<Post, 'title' | 'body' | 'license' | 'custom_license_name' | 'custom_license_text'>, title: string, body: string, license: ArticleLicenseInput): PostActivityChanges {
   const changes: PostActivityChanges = {}
   if (existing.title !== title) changes.title = { before: existing.title, after: title }
   if (existing.body !== body) changes.body = bodyChange(existing.body, body)
   const oldLicense = normalizeArticleLicense(existing.license)
-  const newLicense = normalizeArticleLicense(license)
-  if (oldLicense !== newLicense) changes.license = { before: oldLicense, after: newLicense }
+  const oldCustomName = existing.custom_license_name ?? ''
+  const oldCustomText = existing.custom_license_text ?? ''
+  const newLicense = normalizeArticleLicense(license.license)
+  const customChanged = newLicense === CUSTOM_ARTICLE_LICENSE && (oldCustomName !== license.customName || oldCustomText !== license.customText)
+  if (oldLicense !== newLicense || customChanged) {
+    changes.license = {
+      before: articleLicenseDisplayName(oldLicense, oldCustomName),
+      after: articleLicenseDisplayName(newLicense, license.customName),
+      customTextChanged: oldCustomText !== license.customText
+    }
+  }
   return changes
 }
 
-export async function updatePost(c: Context<{ Bindings: Env }>, existing: Post, title: string, body: string, aiSummary: string | null, license: string) {
-  const normalizedLicense = normalizeArticleLicense(license)
+export async function updatePost(c: Context<{ Bindings: Env }>, existing: Post, title: string, body: string, aiSummary: string | null, license: ArticleLicenseInput) {
+  const normalizedLicense = normalizeArticleLicenseInput(license.license, license.customName, license.customText)
   const changes = describePostChanges(existing, title, body, normalizedLicense)
   if (!changes.title && !changes.body && !changes.license) return false
 
   const statements = [
-    c.env.DB.prepare('UPDATE posts SET title=?,body=?,ai_summary=?,license=? WHERE id=?').bind(title, body, aiSummary, normalizedLicense, existing.id)
+    c.env.DB.prepare('UPDATE posts SET title=?,body=?,ai_summary=?,license=?,custom_license_name=?,custom_license_text=? WHERE id=?')
+      .bind(title, body, aiSummary, normalizedLicense.license, normalizedLicense.customName, normalizedLicense.customText, existing.id)
   ]
   if (existing.published) {
     statements.push(c.env.DB.prepare(`

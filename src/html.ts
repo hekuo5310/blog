@@ -192,7 +192,7 @@ a:hover{opacity:.7}
 .ai-summary-block{margin:1rem 0}
 .ai-summary-box{margin-top:1rem;padding:.9rem 1.1rem;border:1px solid var(--input-border);border-left:3px solid var(--accent);border-radius:6px;background:var(--bg-soft)}
 .ai-summary-label{display:inline-block;font-size:.78rem;font-weight:600;color:var(--accent);margin-bottom:.4rem;letter-spacing:.03em}
-.ai-summary-text{font-size:.92rem;line-height:1.7;color:var(--text-soft)}
+.ai-summary-text{font-size:.92rem;line-height:1.7;color:var(--text-soft);white-space:pre-wrap;overflow-wrap:anywhere}
 
 /* comments */
 .comments{margin-top:3rem;border-top:1px solid var(--border);padding-top:2rem}

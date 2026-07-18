@@ -1,5 +1,6 @@
 import { ARTICLE_LICENSES, CUSTOM_ARTICLE_LICENSE, DEFAULT_ARTICLE_LICENSE, articleLicenseDisplayName, getArticleLicense } from './licenses'
 import { currentUtc8Year, databaseUtcToIso, formatUtc8Date, formatUtc8DateTime } from './time'
+import type { StatItem, StatsReport } from './analytics'
 
 export type Post = { id: number; title: string; slug: string; body: string; published: number; created_at: string; ai_summary?: string | null; license?: string | null; custom_license_name?: string | null; custom_license_text?: string | null }
 export type PostActivityChanges = {
@@ -84,6 +85,8 @@ a:hover{opacity:.7}
 .nav-logo{font-size:1.2rem;font-weight:700;color:var(--text)}
 .nav-links{display:flex;align-items:center;gap:1.5rem;font-size:.9rem;color:var(--muted)}
 .nav-links a:hover{color:var(--text)}
+.nav-report{display:inline-flex;align-items:center;border:1px solid var(--input-border);border-radius:5px;padding:.28rem .55rem;font-weight:600;color:var(--text);white-space:nowrap;background:var(--surface)}
+.nav-report:hover{background:var(--bg-soft)}
 .nav-icon{background:none;border:none;cursor:pointer;color:var(--muted);font-size:1rem;padding:.2rem;font-family:inherit}
 .nav-icon:hover{color:var(--text)}
 .subscribe-toggle{border:1px solid var(--input-border);border-radius:999px;padding:.25rem .75rem;background:var(--surface);color:var(--text);font-size:.86rem;line-height:1.2;cursor:pointer;font-family:inherit;white-space:nowrap}
@@ -196,6 +199,38 @@ a:hover{opacity:.7}
 .ai-summary-label{display:inline-block;font-size:.78rem;font-weight:600;color:var(--accent);margin-bottom:.4rem;letter-spacing:.03em}
 .ai-summary-text{font-size:.92rem;line-height:1.7;color:var(--text-soft);white-space:pre-wrap;overflow-wrap:anywhere}
 
+/* public stats */
+.stats-page{padding:2.5rem 0 1rem}
+.stats-head{display:flex;align-items:end;justify-content:space-between;gap:1rem;margin-bottom:1.5rem}
+.stats-head h1{font-size:1.7rem;line-height:1.2}
+.stats-updated{font-size:.78rem;color:var(--faint);font-variant-numeric:tabular-nums}
+.stats-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;margin-bottom:2rem}
+.stats-kpi{border:1px solid var(--border);border-radius:6px;padding:1rem;background:var(--surface);min-width:0}
+.stats-kpi-label{display:block;font-size:.76rem;color:var(--muted);margin-bottom:.35rem}
+.stats-kpi-value{display:block;font-size:1.65rem;line-height:1.15;font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.stats-section{padding:1.5rem 0;border-top:1px solid var(--border)}
+.stats-section h2{font-size:1rem;margin-bottom:1rem}
+.stats-chart-scroll{overflow-x:auto;padding-bottom:.35rem}
+.stats-bars{display:grid;grid-template-columns:repeat(30,minmax(16px,1fr));gap:5px;align-items:end;min-width:620px;height:165px}
+.stats-bar-col{display:grid;grid-template-rows:18px 120px 18px;align-items:end;height:156px;min-width:0;text-align:center}
+.stats-bar-value{font-size:.62rem;color:var(--faint);font-variant-numeric:tabular-nums;overflow:hidden}
+.stats-bar-track{height:120px;display:flex;align-items:end;background:var(--bg-soft);border-radius:3px 3px 0 0;overflow:hidden}
+.stats-bar{display:block;width:100%;background:var(--accent);min-height:0}
+.stats-bar-col:nth-child(3n) .stats-bar{background:var(--hm-3)}
+.stats-bar-col:nth-child(5n) .stats-bar{background:#d97706}
+.stats-bar-date{font-size:.6rem;color:var(--faint);white-space:nowrap}
+.stats-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:2rem}
+.stats-list{list-style:none}
+.stats-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.75rem;align-items:center;padding:.55rem 0;border-bottom:1px solid var(--border-soft);font-size:.86rem}
+.stats-list li:last-child{border-bottom:0}
+.stats-list-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-soft)}
+.stats-list a.stats-list-label{color:var(--accent)}
+.stats-list-value{font-variant-numeric:tabular-nums;color:var(--muted)}
+.stats-subsection+.stats-subsection{margin-top:1.5rem}
+.stats-subsection h2{font-size:1rem;margin-bottom:.55rem}
+.stats-empty{font-size:.86rem;color:var(--faint);padding:.5rem 0}
+@media(max-width:600px){.nav{padding:.75rem 1rem}.nav-links{gap:.75rem;max-width:calc(100vw - 6.5rem);overflow-x:auto;scrollbar-width:none}.nav-links::-webkit-scrollbar{display:none}.stats-head{align-items:start;flex-direction:column}.stats-kpis{grid-template-columns:1fr}.stats-grid{grid-template-columns:1fr;gap:1.5rem}}
+
 /* comments */
 .comments{margin-top:3rem;border-top:1px solid var(--border);padding-top:2rem}
 .comments h2{font-size:1.1rem;font-weight:600;margin-bottom:1.5rem}
@@ -253,7 +288,7 @@ export function layout(title: string, body: string, adminNav = false, _loggedInU
   const updateJson = JSON.stringify(updates)
   const rightNav = adminNav
     ? `<div class="nav-links"><a href="/admin">管理</a><a href="/admin/post/new">新建</a><a href="/admin/settings">设置</a>${themeToggle}<form method="post" action="/admin/logout" style="display:inline"><button class="nav-icon">退出</button></form></div>`
-    : `<div class="nav-links">${extraLinks}${subscribeToggle}${themeToggle}</div>`
+    : `<div class="nav-links">${extraLinks}<a class="nav-report" href="/stats">访问报表</a>${subscribeToggle}${themeToggle}</div>`
   return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(cfg.desc)}"><link rel="alternate" type="application/rss+xml" title="${esc(cfg.title)} RSS" href="/rss.xml"><title>${esc(title)} — ${esc(cfg.title)}</title><script>
 (function(){
   var saved=localStorage.getItem('theme');
@@ -685,6 +720,43 @@ ${heatmap(activities)}
   return layout(cfg.title, body, false, undefined, cfg, updateItems(posts))
 }
 
+function statList(items: StatItem[], linkPaths = false, labels?: Record<string, string>): string {
+  if (!items.length) return '<p class="stats-empty">暂无数据</p>'
+  return `<ol class="stats-list">${items.map(item => {
+    const label = labels?.[item.label] || item.label
+    const safeLabel = esc(label)
+    const labelHtml = linkPaths && item.label.startsWith('/')
+      ? `<a class="stats-list-label" href="${esc(item.label)}" title="${safeLabel}">${safeLabel}</a>`
+      : `<span class="stats-list-label" title="${safeLabel}">${safeLabel}</span>`
+    return `<li>${labelHtml}<span class="stats-list-value">${item.views.toLocaleString('zh-CN')}</span></li>`
+  }).join('')}</ol>`
+}
+
+export function statsPage(report: StatsReport, cfg: SiteConfig = DEFAULT_CONFIG): string {
+  const maxDaily = Math.max(0, ...report.daily.map(day => day.views))
+  const bars = report.daily.map((day, index) => {
+    const height = maxDaily ? Math.max(2, Math.round(day.views / maxDaily * 120)) : 0
+    const dateLabel = index % 5 === 0 || index === report.daily.length - 1 ? day.date.slice(5) : ''
+    const aria = `${day.date}，${day.views} 次访问`
+    return `<div class="stats-bar-col" title="${esc(aria)}"><span class="stats-bar-value">${day.views || ''}</span><span class="stats-bar-track"><span class="stats-bar" style="height:${height}px" role="img" aria-label="${esc(aria)}"></span></span><span class="stats-bar-date">${dateLabel}</span></div>`
+  }).join('')
+  const deviceLabels = { desktop: '桌面设备', mobile: '手机', tablet: '平板设备' }
+  const body = `<div class="wrap"><main class="stats-page">
+<div class="stats-head"><h1>访问报表</h1><p class="stats-updated">更新于 ${esc(report.generatedAt)} UTC+8</p></div>
+<div class="stats-kpis">
+  <div class="stats-kpi"><span class="stats-kpi-label">累计访问</span><strong class="stats-kpi-value">${report.total.toLocaleString('zh-CN')}</strong></div>
+  <div class="stats-kpi"><span class="stats-kpi-label">今日访问</span><strong class="stats-kpi-value">${report.today.toLocaleString('zh-CN')}</strong></div>
+  <div class="stats-kpi"><span class="stats-kpi-label">近 30 天</span><strong class="stats-kpi-value">${report.last30Days.toLocaleString('zh-CN')}</strong></div>
+</div>
+<section class="stats-section"><h2>近 30 天趋势</h2><div class="stats-chart-scroll"><div class="stats-bars">${bars}</div></div></section>
+<section class="stats-section stats-grid">
+  <div class="stats-subsection"><h2>热门页面</h2>${statList(report.topPages, true)}</div>
+  <div><div class="stats-subsection"><h2>访问来源</h2>${statList(report.referrers)}</div><div class="stats-subsection"><h2>设备类型</h2>${statList(report.devices, false, deviceLabels)}</div></div>
+</section>
+</main></div>`
+  return layout('访问报表', body, false, undefined, cfg)
+}
+
 export function postDetail(post: Post, cfg: SiteConfig = DEFAULT_CONFIG, giscus?: GiscusConfig | null): string {
   let summaries: string[] = []
   try { const a = post.ai_summary ? JSON.parse(post.ai_summary) : []; summaries = Array.isArray(a) ? a.map((s: any) => typeof s === 'string' ? s : '') : [] } catch { summaries = [] }
@@ -888,15 +960,18 @@ export function termsPage(cfg: SiteConfig = DEFAULT_CONFIG): string {
 export function privacyPage(cfg: SiteConfig = DEFAULT_CONFIG): string {
   return legalPage('隐私协议', `<h2>一、我们收集的信息</h2>
 <p>本站不提供公众账号系统。访问本站时，可能处理 RSS 订阅提醒所需的 Cookie、主题偏好等本地设置、访问请求产生的基础技术日志，以及你通过第三方评论服务主动提交的信息。管理员后台使用的会话仅供站点维护者管理内容，不属于公众用户系统。</p>
+<p>为生成公开的访问报表，本站记录被访问的页面路径、外部来源网站的域名、粗粒度设备类型（桌面设备、手机或平板设备）和访问时间。本站的报表统计不保存 IP 地址、不设置分析 Cookie，也不保存完整 User-Agent。站内来源会归为直接访问，公开报表仅展示汇总结果，不展示单条访问记录。</p>
 <h2>二、第三方评论</h2>
 <p>评论区使用 Giscus。加载和使用评论功能时，GitHub/Giscus 可能按照其隐私政策处理你的 GitHub 账号信息、评论内容、设备与网络信息。</p>
 <h2>三、信息用途</h2>
-<p>这些信息用于提供 RSS 订阅提醒、保存界面偏好、展示第三方评论、排查故障、保障网站安全和改进内容体验。</p>
+<p>这些信息用于提供 RSS 订阅提醒、保存界面偏好、展示第三方评论、生成访问趋势和热门内容汇总、排查故障、保障网站安全和改进内容体验。</p>
 <h2>四、Cookie</h2>
-<p>本站公开页面使用 Cookie 保存 RSS 订阅提醒状态，并可能使用浏览器本地存储保存主题偏好。你可以随时在浏览器中清除这些数据；清除后可能需要重新订阅或重新选择主题。</p>
-<h2>五、数据安全</h2>
+<p>本站公开页面使用 Cookie 保存 RSS 订阅提醒状态，并可能使用浏览器本地存储保存主题偏好。访问报表功能不使用 Cookie 识别访客。你可以随时在浏览器中清除这些数据；清除后可能需要重新订阅或重新选择主题。</p>
+<h2>五、访问统计选择</h2>
+<p>本站会过滤常见爬虫和浏览器预取请求。浏览器发送 <code>DNT: 1</code> 或 <code>Sec-GPC: 1</code> 时，本次请求不会计入访问报表。由于统计不创建访客标识，报表显示的是页面访问次数，而不是独立访客人数。</p>
+<h2>六、数据安全</h2>
 <p>我们会采取合理措施保护数据，但互联网传输和第三方服务无法保证绝对安全。</p>
-<h2>六、联系我们</h2>
+<h2>七、联系我们</h2>
 <p>如需删除评论，请在 GitHub Discussions 中处理，或通过网站公开联系方式联系站点维护者。</p>`, cfg)
 }
 

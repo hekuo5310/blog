@@ -11,6 +11,7 @@
 - 无公开用户系统，评论身份验证由 GitHub/Giscus 提供
 - AI 总结：文章内 `[ai-summary]...[/ai-summary]` 标记的内容，发帖时一次性调用 OpenAI 协议 API 生成总结，渲染时原内容在上、AI 总结框在下
 - 全年文章活动墙：记录公开文章的发布和真实修改，点击日期可查看具体改动
+- 公开访问报表：展示访问趋势、热门页面、来源域名和设备类型，不保存 IP 或访客标识
 - 时间统一按 UTC+8（Asia/Shanghai）展示，数据库仍使用 UTC 保存
 - 安全渲染：Markdown 经 DOMPurify 清洗，草稿仅后台可见，管理员登录带失败次数限制
 - 健康检查：`/healthz`
@@ -67,6 +68,7 @@ wrangler d1 execute blog-db --file=migrations/0005_post_activities.sql
 wrangler d1 execute blog-db --file=migrations/0006_remove_user_system.sql
 wrangler d1 execute blog-db --file=migrations/0007_post_license.sql
 wrangler d1 execute blog-db --file=migrations/0008_custom_license.sql
+wrangler d1 execute blog-db --file=migrations/0009_page_views.sql
 ```
 
 ### 6. 配置 AI 总结（可选）
@@ -104,6 +106,7 @@ wrangler d1 execute blog-db --local --file=migrations/0005_post_activities.sql
 wrangler d1 execute blog-db --local --file=migrations/0006_remove_user_system.sql
 wrangler d1 execute blog-db --local --file=migrations/0007_post_license.sql
 wrangler d1 execute blog-db --local --file=migrations/0008_custom_license.sql
+wrangler d1 execute blog-db --local --file=migrations/0009_page_views.sql
 npm run dev
 ```
 
@@ -148,6 +151,8 @@ src/
   posts.ts        文章 CRUD
   html.ts         HTML 模板
   ai-summary.ts   AI 总结：抽取标记块、调用 API
+  analytics.ts    匿名页面访问统计与公开报表聚合
+  time.ts         UTC 与 UTC+8 时间转换
 migrations/
   0001_init.sql         建表
   0004_ai_summary.sql   posts 增加 ai_summary 列
@@ -155,6 +160,7 @@ migrations/
   0006_remove_user_system.sql  删除旧用户与本地评论表
   0007_post_license.sql  文章级许可协议
   0008_custom_license.sql  自定义协议名称与正文
+  0009_page_views.sql  匿名页面访问统计
 wrangler.jsonc          云端部署配置（不含密钥）
 wrangler.toml           本地配置（Git 忽略）
 ```
@@ -168,6 +174,12 @@ https://你的域名/rss.xml
 ```
 
 也兼容 `https://你的域名/feed.xml`。将地址复制到 Feedly、Inoreader、Follow 等 RSS 阅读器即可订阅公开文章更新。
+
+## 访问报表
+
+公开报表地址为 `/stats`，也可通过首页顶部的“访问报表”按钮进入。报表按 UTC+8 汇总累计访问、今日访问、近 30 天趋势、热门页面、外部来源域名和设备类型。
+
+统计不保存 IP 地址、完整 User-Agent 或访客标识，不使用分析 Cookie，并过滤常见爬虫和浏览器预取请求。浏览器发送 `DNT: 1` 或 `Sec-GPC: 1` 时不会记录该次访问，因此报表展示的是页面访问次数，不是独立访客人数。
 
 ## 折叠内容
 

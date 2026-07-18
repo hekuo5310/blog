@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, DEFAULT_CONFIG } from './html'
+import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, statsPage, DEFAULT_CONFIG } from './html'
 import type { GiscusConfig, SiteConfig, Post } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish } from './pages'
 import { createSession, validateSession, deleteSession, sessionCookie, clearCookie, isLoginRateLimited, recordLoginFailure, clearLoginFailures } from './auth'
@@ -9,6 +9,7 @@ import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, upl
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries } from './ai-summary'
 import { normalizeArticleLicenseInput } from './licenses'
 import { databaseUtcToIso, parseDatabaseUtc } from './time'
+import { getPublicStats, recordPageView, shouldRecordPageView } from './analytics'
 
 export type Env = {
   DB: D1Database
@@ -39,6 +40,13 @@ app.use('*', async (c, next) => {
   c.header('X-Frame-Options', 'SAMEORIGIN')
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+})
+
+app.use('*', async (c, next) => {
+  await next()
+  if (shouldRecordPageView(c)) {
+    c.executionCtx.waitUntil(recordPageView(c).catch(error => console.error('page view recording failed', error)))
+  }
 })
 
 async function getConfig(env: Env): Promise<SiteConfig> {
@@ -121,6 +129,12 @@ app.get('/healthz', async (c) => {
   await c.env.DB.prepare('SELECT 1').first()
   c.header('Cache-Control', 'no-store')
   return c.json({ ok: true })
+})
+
+app.get('/stats', async (c) => {
+  const [report, cfg] = await Promise.all([getPublicStats(c), getConfig(c.env)])
+  c.header('Cache-Control', 'public, max-age=60')
+  return c.html(statsPage(report, cfg))
 })
 
 app.get('/post/:slug', async (c) => {

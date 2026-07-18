@@ -16,7 +16,7 @@ export type StatsReport = {
 }
 
 const BOT_PATTERN = /bot|crawler|spider|slurp|bingpreview|facebookexternalhit|headless|lighthouse|uptime|monitor/i
-const EXCLUDED_PATHS = ['/healthz', '/rss.xml', '/feed.xml', '/updates.json', '/favicon.ico']
+const EXCLUDED_PATHS = ['/healthz', '/rss.xml', '/feed.xml', '/updates.json', '/stats', '/stats.json', '/favicon.ico']
 
 function deviceFromUserAgent(userAgent: string): 'desktop' | 'mobile' | 'tablet' {
   if (/ipad|tablet|kindle|silk/i.test(userAgent)) return 'tablet'

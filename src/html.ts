@@ -742,18 +742,74 @@ export function statsPage(report: StatsReport, cfg: SiteConfig = DEFAULT_CONFIG)
   }).join('')
   const deviceLabels = { desktop: '桌面设备', mobile: '手机', tablet: '平板设备' }
   const body = `<div class="wrap"><main class="stats-page">
-<div class="stats-head"><h1>访问报表</h1><p class="stats-updated">更新于 ${esc(report.generatedAt)} UTC+8</p></div>
+<div class="stats-head"><h1>访问报表</h1><p class="stats-updated" id="stats-updated">更新于 ${esc(report.generatedAt)} UTC+8</p></div>
 <div class="stats-kpis">
-  <div class="stats-kpi"><span class="stats-kpi-label">累计访问</span><strong class="stats-kpi-value">${report.total.toLocaleString('zh-CN')}</strong></div>
-  <div class="stats-kpi"><span class="stats-kpi-label">今日访问</span><strong class="stats-kpi-value">${report.today.toLocaleString('zh-CN')}</strong></div>
-  <div class="stats-kpi"><span class="stats-kpi-label">近 30 天</span><strong class="stats-kpi-value">${report.last30Days.toLocaleString('zh-CN')}</strong></div>
+  <div class="stats-kpi"><span class="stats-kpi-label">累计访问</span><strong class="stats-kpi-value" id="stats-total">${report.total.toLocaleString('zh-CN')}</strong></div>
+  <div class="stats-kpi"><span class="stats-kpi-label">今日访问</span><strong class="stats-kpi-value" id="stats-today">${report.today.toLocaleString('zh-CN')}</strong></div>
+  <div class="stats-kpi"><span class="stats-kpi-label">近 30 天</span><strong class="stats-kpi-value" id="stats-last30">${report.last30Days.toLocaleString('zh-CN')}</strong></div>
 </div>
-<section class="stats-section"><h2>近 30 天趋势</h2><div class="stats-chart-scroll"><div class="stats-bars">${bars}</div></div></section>
+<section class="stats-section"><h2>近 30 天趋势</h2><div class="stats-chart-scroll"><div class="stats-bars" id="stats-bars">${bars}</div></div></section>
 <section class="stats-section stats-grid">
-  <div class="stats-subsection"><h2>热门页面</h2>${statList(report.topPages, true)}</div>
-  <div><div class="stats-subsection"><h2>访问来源</h2>${statList(report.referrers)}</div><div class="stats-subsection"><h2>设备类型</h2>${statList(report.devices, false, deviceLabels)}</div></div>
+  <div class="stats-subsection"><h2>热门页面</h2><div id="stats-pages">${statList(report.topPages, true)}</div></div>
+  <div><div class="stats-subsection"><h2>访问来源</h2><div id="stats-referrers">${statList(report.referrers)}</div></div><div class="stats-subsection"><h2>设备类型</h2><div id="stats-devices">${statList(report.devices, false, deviceLabels)}</div></div></div>
 </section>
-</main></div>`
+</main></div>
+<script>
+(function(){
+  var numberFormat=new Intl.NumberFormat('zh-CN');
+  var deviceLabels={desktop:'桌面设备',mobile:'手机',tablet:'平板设备'};
+  var refreshing=false;
+  function renderList(id,items,linkPaths,labels){
+    var root=document.getElementById(id);
+    if(!root)return;
+    root.textContent='';
+    if(!items.length){var empty=document.createElement('p');empty.className='stats-empty';empty.textContent='暂无数据';root.appendChild(empty);return;}
+    var list=document.createElement('ol');list.className='stats-list';
+    items.forEach(function(item){
+      var li=document.createElement('li');
+      var label=(labels&&labels[item.label])||item.label;
+      var name;
+      if(linkPaths&&String(item.label).startsWith('/')){name=document.createElement('a');name.href=item.label;}else{name=document.createElement('span');}
+      name.className='stats-list-label';name.title=label;name.textContent=label;
+      var value=document.createElement('span');value.className='stats-list-value';value.textContent=numberFormat.format(item.views);
+      li.append(name,value);list.appendChild(li);
+    });
+    root.appendChild(list);
+  }
+  function renderBars(days){
+    var root=document.getElementById('stats-bars');
+    if(!root)return;
+    root.textContent='';
+    var max=Math.max.apply(null,[0].concat(days.map(function(day){return day.views})));
+    days.forEach(function(day,index){
+      var height=max?Math.max(2,Math.round(day.views/max*120)):0;
+      var aria=day.date+'，'+day.views+' 次访问';
+      var col=document.createElement('div');col.className='stats-bar-col';col.title=aria;
+      var value=document.createElement('span');value.className='stats-bar-value';value.textContent=day.views||'';
+      var track=document.createElement('span');track.className='stats-bar-track';
+      var bar=document.createElement('span');bar.className='stats-bar';bar.style.height=height+'px';bar.setAttribute('role','img');bar.setAttribute('aria-label',aria);track.appendChild(bar);
+      var date=document.createElement('span');date.className='stats-bar-date';date.textContent=index%5===0||index===days.length-1?day.date.slice(5):'';
+      col.append(value,track,date);root.appendChild(col);
+    });
+  }
+  function render(report){
+    document.getElementById('stats-total').textContent=numberFormat.format(report.total);
+    document.getElementById('stats-today').textContent=numberFormat.format(report.today);
+    document.getElementById('stats-last30').textContent=numberFormat.format(report.last30Days);
+    document.getElementById('stats-updated').textContent='更新于 '+report.generatedAt+' UTC+8';
+    renderBars(report.daily||[]);
+    renderList('stats-pages',report.topPages||[],true);
+    renderList('stats-referrers',report.referrers||[],false);
+    renderList('stats-devices',report.devices||[],false,deviceLabels);
+  }
+  async function refresh(){
+    if(refreshing)return;
+    refreshing=true;
+    try{var response=await fetch('/stats.json',{cache:'no-store',headers:{Accept:'application/json'}});if(response.ok)render(await response.json());}catch(error){}finally{refreshing=false;}
+  }
+  setInterval(refresh,5000);
+})();
+</script>`
   return layout('访问报表', body, false, undefined, cfg)
 }
 
@@ -968,7 +1024,7 @@ export function privacyPage(cfg: SiteConfig = DEFAULT_CONFIG): string {
 <h2>四、Cookie</h2>
 <p>本站公开页面使用 Cookie 保存 RSS 订阅提醒状态，并可能使用浏览器本地存储保存主题偏好。访问报表功能不使用 Cookie 识别访客。你可以随时在浏览器中清除这些数据；清除后可能需要重新订阅或重新选择主题。</p>
 <h2>五、访问统计选择</h2>
-<p>本站会过滤常见爬虫和浏览器预取请求。浏览器发送 <code>DNT: 1</code> 或 <code>Sec-GPC: 1</code> 时，本次请求不会计入访问报表。由于统计不创建访客标识，报表显示的是页面访问次数，而不是独立访客人数。</p>
+<p>本站会过滤常见爬虫、浏览器预取请求，以及访问报表页面和报表数据接口自身产生的请求。浏览器发送 <code>DNT: 1</code> 或 <code>Sec-GPC: 1</code> 时，本次请求不会计入访问报表。由于统计不创建访客标识，报表显示的是页面访问次数，而不是独立访客人数。</p>
 <h2>六、数据安全</h2>
 <p>我们会采取合理措施保护数据，但互联网传输和第三方服务无法保证绝对安全。</p>
 <h2>七、联系我们</h2>

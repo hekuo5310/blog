@@ -14,6 +14,7 @@ export type StatsReport = {
   trend: TrendStat[]
   topPages: StatItem[]
   referrers: StatItem[]
+  countries: StatItem[]
   devices: StatItem[]
   generatedAt: string
 }
@@ -48,6 +49,27 @@ function externalReferrerHost(requestUrl: string, referrer?: string): string | n
   }
 }
 
+function countryCodeFromRequest(c: Context<{ Bindings: Env }>): string | null {
+  const country = c.req.raw.cf?.country
+  return typeof country === 'string' && /^[A-Z]{2}$/.test(country) ? country : null
+}
+
+function countryLabel(code: string): string {
+  const specialNames: Record<string, string> = {
+    CN: 'China',
+    TW: 'Taiwan, China',
+    HK: 'Hong Kong SAR, China',
+    MO: 'Macao SAR, China'
+  }
+  if (!code) return '未知地区'
+  if (specialNames[code]) return specialNames[code]
+  try {
+    return new Intl.DisplayNames(['zh-CN'], { type: 'region' }).of(code) || code
+  } catch {
+    return code
+  }
+}
+
 export function shouldRecordPageView(c: Context<{ Bindings: Env }>): boolean {
   if (c.req.method !== 'GET' || c.res.status < 200 || c.res.status >= 400) return false
   const path = c.req.path
@@ -60,8 +82,8 @@ export function shouldRecordPageView(c: Context<{ Bindings: Env }>): boolean {
 export async function recordPageView(c: Context<{ Bindings: Env }>): Promise<void> {
   const path = (c.req.path.length > 1 ? c.req.path.replace(/\/+$/, '') : '/').slice(0, 300)
   const userAgent = c.req.header('User-Agent') || ''
-  await c.env.DB.prepare('INSERT INTO page_views (path,referrer_host,device) VALUES (?,?,?)')
-    .bind(path, externalReferrerHost(c.req.url, c.req.header('Referer')), deviceFromUserAgent(userAgent)).run()
+  await c.env.DB.prepare('INSERT INTO page_views (path,referrer_host,device,country_code) VALUES (?,?,?,?)')
+    .bind(path, externalReferrerHost(c.req.url, c.req.header('Referer')), deviceFromUserAgent(userAgent), countryCodeFromRequest(c)).run()
 }
 
 function numberValue(value: unknown): number {
@@ -93,7 +115,7 @@ export async function getPublicStats(c: Context<{ Bindings: Env }>, requestedRan
   const groupExpression = config.unit === 'hour'
     ? "strftime('%Y-%m-%dT%H:00',created_at,'+8 hours')"
     : "date(created_at,'+8 hours')"
-  const [total, today, periodViews, trendRows, pageRows, referrerRows, deviceRows] = await Promise.all([
+  const [total, today, periodViews, trendRows, pageRows, referrerRows, countryRows, deviceRows] = await Promise.all([
     count(c, 'SELECT COUNT(*) AS views FROM page_views'),
     count(c, "SELECT COUNT(*) AS views FROM page_views WHERE date(created_at,'+8 hours')=date('now','+8 hours')"),
     count(c, `SELECT COUNT(*) AS views FROM page_views WHERE ${windowSql}`),
@@ -103,6 +125,8 @@ export async function getPublicStats(c: Context<{ Bindings: Env }>, requestedRan
       WHERE ${windowSql} GROUP BY path ORDER BY views DESC, path LIMIT 10`).all<StatItem>(),
     c.env.DB.prepare(`SELECT COALESCE(referrer_host,'直接访问') AS label, COUNT(*) AS views FROM page_views
       WHERE ${windowSql} GROUP BY referrer_host ORDER BY views DESC LIMIT 8`).all<StatItem>(),
+    c.env.DB.prepare(`SELECT COALESCE(country_code,'') AS label, COUNT(*) AS views FROM page_views
+      WHERE ${windowSql} GROUP BY country_code ORDER BY views DESC, country_code LIMIT 10`).all<StatItem>(),
     c.env.DB.prepare(`SELECT device AS label, COUNT(*) AS views FROM page_views
       WHERE ${windowSql} GROUP BY device ORDER BY views DESC`).all<StatItem>()
   ])
@@ -117,6 +141,7 @@ export async function getPublicStats(c: Context<{ Bindings: Env }>, requestedRan
     trend: trendKeys(range).map(key => ({ key, views: trendMap.get(key) || 0 })),
     topPages: pageRows.results.map(row => ({ label: row.label, views: numberValue(row.views) })),
     referrers: referrerRows.results.map(row => ({ label: row.label, views: numberValue(row.views) })),
+    countries: countryRows.results.map(row => ({ label: countryLabel(row.label), views: numberValue(row.views) })),
     devices: deviceRows.results.map(row => ({ label: row.label, views: numberValue(row.views) })),
     generatedAt: formatUtc8DateTime(new Date().toISOString())
   }

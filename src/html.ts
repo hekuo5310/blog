@@ -766,7 +766,7 @@ export function statsPage(report: StatsReport, cfg: SiteConfig = DEFAULT_CONFIG)
 <section class="stats-section"><h2 id="stats-trend-title">${esc(report.rangeLabel)}趋势</h2><div class="stats-chart-scroll"><div class="stats-bars" id="stats-bars" style="grid-template-columns:repeat(${report.trend.length},minmax(16px,1fr));min-width:${chartWidth}px">${bars}</div></div></section>
 <section class="stats-section stats-grid">
   <div class="stats-subsection"><h2>热门页面</h2><div id="stats-pages">${statList(report.topPages, true)}</div></div>
-  <div><div class="stats-subsection"><h2>访问来源</h2><div id="stats-referrers">${statList(report.referrers)}</div></div><div class="stats-subsection"><h2>设备类型</h2><div id="stats-devices">${statList(report.devices, false, deviceLabels)}</div></div></div>
+  <div><div class="stats-subsection"><h2>来源网站</h2><div id="stats-referrers">${statList(report.referrers)}</div></div><div class="stats-subsection"><h2>访客地区</h2><div id="stats-countries">${statList(report.countries)}</div></div><div class="stats-subsection"><h2>设备类型</h2><div id="stats-devices">${statList(report.devices, false, deviceLabels)}</div></div></div>
 </section>
 </main></div>
 <script>
@@ -826,6 +826,7 @@ export function statsPage(report: StatsReport, cfg: SiteConfig = DEFAULT_CONFIG)
     renderBars(report.trend||[],report.range);
     renderList('stats-pages',report.topPages||[],true);
     renderList('stats-referrers',report.referrers||[],false);
+    renderList('stats-countries',report.countries||[],false);
     renderList('stats-devices',report.devices||[],false,deviceLabels);
   }
   async function refresh(){
@@ -1048,7 +1049,7 @@ export function termsPage(cfg: SiteConfig = DEFAULT_CONFIG): string {
 export function privacyPage(cfg: SiteConfig = DEFAULT_CONFIG): string {
   return legalPage('隐私协议', `<h2>一、我们收集的信息</h2>
 <p>本站不提供公众账号系统。访问本站时，可能处理 RSS 订阅提醒所需的 Cookie、主题偏好等本地设置、访问请求产生的基础技术日志，以及你通过第三方评论服务主动提交的信息。管理员后台使用的会话仅供站点维护者管理内容，不属于公众用户系统。</p>
-<p>为生成公开的访问报表，本站记录被访问的页面路径、外部来源网站的域名、粗粒度设备类型（桌面设备、手机或平板设备）和访问时间。本站的报表统计不保存 IP 地址、不设置分析 Cookie，也不保存完整 User-Agent。站内来源会归为直接访问，公开报表仅展示汇总结果，不展示单条访问记录。</p>
+<p>为生成公开的访问报表，本站记录被访问的页面路径、外部来源网站的域名、粗粒度设备类型（桌面设备、手机或平板设备）、访问时间，以及 Cloudflare 根据访问 IP 提供的两位国家或地区代码。本站仅保存该粗粒度代码，不保存 IP 地址、不设置分析 Cookie，也不保存完整 User-Agent。站内来源会归为直接访问，无法识别的地区会归为未知地区，公开报表仅展示汇总结果，不展示单条访问记录。</p>
 <h2>二、第三方评论</h2>
 <p>评论区使用 Giscus。加载和使用评论功能时，GitHub/Giscus 可能按照其隐私政策处理你的 GitHub 账号信息、评论内容、设备与网络信息。</p>
 <h2>三、信息用途</h2>

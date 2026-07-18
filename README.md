@@ -69,6 +69,7 @@ wrangler d1 execute blog-db --file=migrations/0006_remove_user_system.sql
 wrangler d1 execute blog-db --file=migrations/0007_post_license.sql
 wrangler d1 execute blog-db --file=migrations/0008_custom_license.sql
 wrangler d1 execute blog-db --file=migrations/0009_page_views.sql
+wrangler d1 execute blog-db --file=migrations/0010_page_view_country.sql
 ```
 
 ### 6. 配置 AI 总结（可选）
@@ -107,6 +108,7 @@ wrangler d1 execute blog-db --local --file=migrations/0006_remove_user_system.sq
 wrangler d1 execute blog-db --local --file=migrations/0007_post_license.sql
 wrangler d1 execute blog-db --local --file=migrations/0008_custom_license.sql
 wrangler d1 execute blog-db --local --file=migrations/0009_page_views.sql
+wrangler d1 execute blog-db --local --file=migrations/0010_page_view_country.sql
 npm run dev
 ```
 
@@ -161,6 +163,7 @@ migrations/
   0007_post_license.sql  文章级许可协议
   0008_custom_license.sql  自定义协议名称与正文
   0009_page_views.sql  匿名页面访问统计
+  0010_page_view_country.sql  访问国家或地区代码
 wrangler.jsonc          云端部署配置（不含密钥）
 wrangler.toml           本地配置（Git 忽略）
 ```
@@ -177,9 +180,9 @@ https://你的域名/rss.xml
 
 ## 访问报表
 
-公开报表地址为 `/stats`，也可通过首页顶部的“访问报表”按钮进入。页面默认显示最近 24 小时，可切换最近 7 天、30 天或 90 天；24 小时趋势按 UTC+8 小时汇总，其余范围按 UTC+8 自然日汇总。页面每 5 秒请求一次 `/stats.json` 并原地刷新当前范围，包括访问趋势、热门页面、外部来源域名和设备类型。
+公开报表地址为 `/stats`，也可通过首页顶部的“访问报表”按钮进入。页面默认显示最近 24 小时，可切换最近 7 天、30 天或 90 天；24 小时趋势按 UTC+8 小时汇总，其余范围按 UTC+8 自然日汇总。页面每 5 秒请求一次 `/stats.json` 并原地刷新当前范围，包括访问趋势、热门页面、外部来源域名、访客国家或地区和设备类型。
 
-统计不保存 IP 地址、完整 User-Agent 或访客标识，不使用分析 Cookie，并过滤常见爬虫、浏览器预取请求以及 `/stats`、`/stats.json` 报表请求。浏览器发送 `DNT: 1` 或 `Sec-GPC: 1` 时不会记录该次访问，因此报表展示的是页面访问次数，不是独立访客人数。
+统计仅保存 Cloudflare 根据访问 IP 提供的两位国家或地区代码，不保存 IP 地址、完整 User-Agent 或访客标识，不使用分析 Cookie，并过滤常见爬虫、浏览器预取请求以及 `/stats`、`/stats.json` 报表请求。浏览器发送 `DNT: 1` 或 `Sec-GPC: 1` 时不会记录该次访问，因此报表展示的是页面访问次数，不是独立访客人数。
 
 ## 折叠内容
 

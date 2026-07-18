@@ -132,14 +132,14 @@ app.get('/healthz', async (c) => {
 })
 
 app.get('/stats', async (c) => {
-  const [report, cfg] = await Promise.all([getPublicStats(c), getConfig(c.env)])
+  const [report, cfg] = await Promise.all([getPublicStats(c, c.req.query('range')), getConfig(c.env)])
   c.header('Cache-Control', 'no-store')
   return c.html(statsPage(report, cfg))
 })
 
 app.get('/stats.json', async (c) => {
   c.header('Cache-Control', 'no-store')
-  return c.json(await getPublicStats(c))
+  return c.json(await getPublicStats(c, c.req.query('range')))
 })
 
 app.get('/post/:slug', async (c) => {

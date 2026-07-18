@@ -204,6 +204,13 @@ a:hover{opacity:.7}
 .stats-head{display:flex;align-items:end;justify-content:space-between;gap:1rem;margin-bottom:1.5rem}
 .stats-head h1{font-size:1.7rem;line-height:1.2}
 .stats-updated{font-size:.78rem;color:var(--faint);font-variant-numeric:tabular-nums}
+.stats-toolbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem}
+.stats-range{display:inline-flex;border:1px solid var(--input-border);border-radius:6px;overflow:hidden;max-width:100%}
+.stats-range-button{min-height:34px;padding:.35rem .8rem;border:0;border-right:1px solid var(--input-border);border-radius:0;background:var(--surface);color:var(--text-soft);font-size:.78rem;white-space:nowrap;cursor:pointer}
+.stats-range-button:last-child{border-right:0}
+.stats-range-button:hover{background:var(--bg-soft);color:var(--text)}
+.stats-range-button[aria-pressed="true"]{background:var(--button-bg);color:var(--bg)}
+.stats-range-button:focus-visible{position:relative;z-index:1;outline:2px solid var(--accent);outline-offset:-2px}
 .stats-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;margin-bottom:2rem}
 .stats-kpi{border:1px solid var(--border);border-radius:6px;padding:1rem;background:var(--surface);min-width:0}
 .stats-kpi-label{display:block;font-size:.76rem;color:var(--muted);margin-bottom:.35rem}
@@ -211,7 +218,7 @@ a:hover{opacity:.7}
 .stats-section{padding:1.5rem 0;border-top:1px solid var(--border)}
 .stats-section h2{font-size:1rem;margin-bottom:1rem}
 .stats-chart-scroll{overflow-x:auto;padding-bottom:.35rem}
-.stats-bars{display:grid;grid-template-columns:repeat(30,minmax(16px,1fr));gap:5px;align-items:end;min-width:620px;height:165px}
+.stats-bars{display:grid;gap:5px;align-items:end;height:165px}
 .stats-bar-col{display:grid;grid-template-rows:18px 120px 18px;align-items:end;height:156px;min-width:0;text-align:center}
 .stats-bar-value{font-size:.62rem;color:var(--faint);font-variant-numeric:tabular-nums;overflow:hidden}
 .stats-bar-track{height:120px;display:flex;align-items:end;background:var(--bg-soft);border-radius:3px 3px 0 0;overflow:hidden}
@@ -229,7 +236,7 @@ a:hover{opacity:.7}
 .stats-subsection+.stats-subsection{margin-top:1.5rem}
 .stats-subsection h2{font-size:1rem;margin-bottom:.55rem}
 .stats-empty{font-size:.86rem;color:var(--faint);padding:.5rem 0}
-@media(max-width:600px){.nav{padding:.75rem 1rem}.nav-links{gap:.75rem;max-width:calc(100vw - 6.5rem);overflow-x:auto;scrollbar-width:none}.nav-links::-webkit-scrollbar{display:none}.stats-head{align-items:start;flex-direction:column}.stats-kpis{grid-template-columns:1fr}.stats-grid{grid-template-columns:1fr;gap:1.5rem}}
+@media(max-width:600px){.nav{padding:.75rem 1rem}.nav-links{gap:.75rem;max-width:calc(100vw - 6.5rem);overflow-x:auto;scrollbar-width:none}.nav-links::-webkit-scrollbar{display:none}.stats-head{align-items:start;flex-direction:column}.stats-toolbar{align-items:start;flex-direction:column}.stats-range{width:100%;overflow-x:auto}.stats-range-button{flex:1}.stats-kpis{grid-template-columns:1fr}.stats-grid{grid-template-columns:1fr;gap:1.5rem}}
 
 /* comments */
 .comments{margin-top:3rem;border-top:1px solid var(--border);padding-top:2rem}
@@ -733,22 +740,30 @@ function statList(items: StatItem[], linkPaths = false, labels?: Record<string, 
 }
 
 export function statsPage(report: StatsReport, cfg: SiteConfig = DEFAULT_CONFIG): string {
-  const maxDaily = Math.max(0, ...report.daily.map(day => day.views))
-  const bars = report.daily.map((day, index) => {
-    const height = maxDaily ? Math.max(2, Math.round(day.views / maxDaily * 120)) : 0
-    const dateLabel = index % 5 === 0 || index === report.daily.length - 1 ? day.date.slice(5) : ''
-    const aria = `${day.date}，${day.views} 次访问`
-    return `<div class="stats-bar-col" title="${esc(aria)}"><span class="stats-bar-value">${day.views || ''}</span><span class="stats-bar-track"><span class="stats-bar" style="height:${height}px" role="img" aria-label="${esc(aria)}"></span></span><span class="stats-bar-date">${dateLabel}</span></div>`
+  const maxTrend = Math.max(0, ...report.trend.map(item => item.views))
+  const trendLabel = (key: string, index: number): string => {
+    const interval = report.range === '24h' ? 4 : report.range === '7d' ? 1 : report.range === '30d' ? 5 : 15
+    if (index % interval !== 0 && index !== report.trend.length - 1) return ''
+    return report.range === '24h' ? key.slice(11, 16) : key.slice(5)
+  }
+  const bars = report.trend.map((item, index) => {
+    const height = maxTrend ? Math.max(2, Math.round(item.views / maxTrend * 120)) : 0
+    const aria = `${item.key}，${item.views} 次访问`
+    return `<div class="stats-bar-col" title="${esc(aria)}"><span class="stats-bar-value">${item.views || ''}</span><span class="stats-bar-track"><span class="stats-bar" style="height:${height}px" role="img" aria-label="${esc(aria)}"></span></span><span class="stats-bar-date">${trendLabel(item.key, index)}</span></div>`
   }).join('')
+  const chartWidth = Math.max(620, report.trend.length * 18)
+  const ranges = [['24h', '24 小时'], ['7d', '7 天'], ['30d', '30 天'], ['90d', '90 天']] as const
+  const rangeButtons = ranges.map(([value, label]) => `<button class="stats-range-button" type="button" data-range="${value}" aria-pressed="${report.range === value}">${label}</button>`).join('')
   const deviceLabels = { desktop: '桌面设备', mobile: '手机', tablet: '平板设备' }
   const body = `<div class="wrap"><main class="stats-page">
 <div class="stats-head"><h1>访问报表</h1><p class="stats-updated" id="stats-updated">更新于 ${esc(report.generatedAt)} UTC+8</p></div>
+<div class="stats-toolbar"><div class="stats-range" aria-label="统计时间范围">${rangeButtons}</div></div>
 <div class="stats-kpis">
   <div class="stats-kpi"><span class="stats-kpi-label">累计访问</span><strong class="stats-kpi-value" id="stats-total">${report.total.toLocaleString('zh-CN')}</strong></div>
   <div class="stats-kpi"><span class="stats-kpi-label">今日访问</span><strong class="stats-kpi-value" id="stats-today">${report.today.toLocaleString('zh-CN')}</strong></div>
-  <div class="stats-kpi"><span class="stats-kpi-label">近 30 天</span><strong class="stats-kpi-value" id="stats-last30">${report.last30Days.toLocaleString('zh-CN')}</strong></div>
+  <div class="stats-kpi"><span class="stats-kpi-label" id="stats-period-label">${esc(report.rangeLabel)}</span><strong class="stats-kpi-value" id="stats-period">${report.periodViews.toLocaleString('zh-CN')}</strong></div>
 </div>
-<section class="stats-section"><h2>近 30 天趋势</h2><div class="stats-chart-scroll"><div class="stats-bars" id="stats-bars">${bars}</div></div></section>
+<section class="stats-section"><h2 id="stats-trend-title">${esc(report.rangeLabel)}趋势</h2><div class="stats-chart-scroll"><div class="stats-bars" id="stats-bars" style="grid-template-columns:repeat(${report.trend.length},minmax(16px,1fr));min-width:${chartWidth}px">${bars}</div></div></section>
 <section class="stats-section stats-grid">
   <div class="stats-subsection"><h2>热门页面</h2><div id="stats-pages">${statList(report.topPages, true)}</div></div>
   <div><div class="stats-subsection"><h2>访问来源</h2><div id="stats-referrers">${statList(report.referrers)}</div></div><div class="stats-subsection"><h2>设备类型</h2><div id="stats-devices">${statList(report.devices, false, deviceLabels)}</div></div></div>
@@ -758,7 +773,11 @@ export function statsPage(report: StatsReport, cfg: SiteConfig = DEFAULT_CONFIG)
 (function(){
   var numberFormat=new Intl.NumberFormat('zh-CN');
   var deviceLabels={desktop:'桌面设备',mobile:'手机',tablet:'平板设备'};
-  var refreshing=false;
+  var currentRange=${jsonForScript(report.range)};
+  var requestSerial=0;
+  function updateRangeButtons(){
+    document.querySelectorAll('[data-range]').forEach(function(button){button.setAttribute('aria-pressed',String(button.dataset.range===currentRange));});
+  }
   function renderList(id,items,linkPaths,labels){
     var root=document.getElementById(id);
     if(!root)return;
@@ -776,37 +795,50 @@ export function statsPage(report: StatsReport, cfg: SiteConfig = DEFAULT_CONFIG)
     });
     root.appendChild(list);
   }
-  function renderBars(days){
+  function renderBars(trend,range){
     var root=document.getElementById('stats-bars');
     if(!root)return;
     root.textContent='';
-    var max=Math.max.apply(null,[0].concat(days.map(function(day){return day.views})));
-    days.forEach(function(day,index){
-      var height=max?Math.max(2,Math.round(day.views/max*120)):0;
-      var aria=day.date+'，'+day.views+' 次访问';
+    root.style.gridTemplateColumns='repeat('+trend.length+',minmax(16px,1fr))';
+    root.style.minWidth=Math.max(620,trend.length*18)+'px';
+    var max=Math.max.apply(null,[0].concat(trend.map(function(item){return item.views})));
+    var interval=range==='24h'?4:range==='7d'?1:range==='30d'?5:15;
+    trend.forEach(function(item,index){
+      var height=max?Math.max(2,Math.round(item.views/max*120)):0;
+      var aria=item.key+'，'+item.views+' 次访问';
       var col=document.createElement('div');col.className='stats-bar-col';col.title=aria;
-      var value=document.createElement('span');value.className='stats-bar-value';value.textContent=day.views||'';
+      var value=document.createElement('span');value.className='stats-bar-value';value.textContent=item.views||'';
       var track=document.createElement('span');track.className='stats-bar-track';
       var bar=document.createElement('span');bar.className='stats-bar';bar.style.height=height+'px';bar.setAttribute('role','img');bar.setAttribute('aria-label',aria);track.appendChild(bar);
-      var date=document.createElement('span');date.className='stats-bar-date';date.textContent=index%5===0||index===days.length-1?day.date.slice(5):'';
+      var date=document.createElement('span');date.className='stats-bar-date';date.textContent=index%interval===0||index===trend.length-1?(range==='24h'?item.key.slice(11,16):item.key.slice(5)):'';
       col.append(value,track,date);root.appendChild(col);
     });
   }
   function render(report){
+    currentRange=report.range;
+    updateRangeButtons();
     document.getElementById('stats-total').textContent=numberFormat.format(report.total);
     document.getElementById('stats-today').textContent=numberFormat.format(report.today);
-    document.getElementById('stats-last30').textContent=numberFormat.format(report.last30Days);
+    document.getElementById('stats-period-label').textContent=report.rangeLabel;
+    document.getElementById('stats-period').textContent=numberFormat.format(report.periodViews);
+    document.getElementById('stats-trend-title').textContent=report.rangeLabel+'趋势';
     document.getElementById('stats-updated').textContent='更新于 '+report.generatedAt+' UTC+8';
-    renderBars(report.daily||[]);
+    renderBars(report.trend||[],report.range);
     renderList('stats-pages',report.topPages||[],true);
     renderList('stats-referrers',report.referrers||[],false);
     renderList('stats-devices',report.devices||[],false,deviceLabels);
   }
   async function refresh(){
-    if(refreshing)return;
-    refreshing=true;
-    try{var response=await fetch('/stats.json',{cache:'no-store',headers:{Accept:'application/json'}});if(response.ok)render(await response.json());}catch(error){}finally{refreshing=false;}
+    var requestedRange=currentRange;
+    var serial=++requestSerial;
+    try{var response=await fetch('/stats.json?range='+encodeURIComponent(requestedRange),{cache:'no-store',headers:{Accept:'application/json'}});if(response.ok&&serial===requestSerial&&requestedRange===currentRange)render(await response.json());}catch(error){}
   }
+  document.querySelectorAll('[data-range]').forEach(function(button){button.addEventListener('click',function(){
+    currentRange=button.dataset.range;
+    updateRangeButtons();
+    history.replaceState(null,'','/stats?range='+encodeURIComponent(currentRange));
+    refresh();
+  });});
   setInterval(refresh,5000);
 })();
 </script>`

@@ -3,12 +3,15 @@ import type { Env } from './index'
 import { formatUtc8DateTime } from './time'
 
 export type StatItem = { label: string; views: number }
-export type DailyStat = { date: string; views: number }
+export type StatsRange = '24h' | '7d' | '30d' | '90d'
+export type TrendStat = { key: string; views: number }
 export type StatsReport = {
   total: number
   today: number
-  last30Days: number
-  daily: DailyStat[]
+  range: StatsRange
+  rangeLabel: string
+  periodViews: number
+  trend: TrendStat[]
   topPages: StatItem[]
   referrers: StatItem[]
   devices: StatItem[]
@@ -17,6 +20,16 @@ export type StatsReport = {
 
 const BOT_PATTERN = /bot|crawler|spider|slurp|bingpreview|facebookexternalhit|headless|lighthouse|uptime|monitor/i
 const EXCLUDED_PATHS = ['/healthz', '/rss.xml', '/feed.xml', '/updates.json', '/stats', '/stats.json', '/favicon.ico']
+const RANGE_CONFIG: Record<StatsRange, { label: string; windowStart: string; buckets: number; unit: 'hour' | 'day' }> = {
+  '24h': { label: '最近 24 小时', windowStart: "datetime(strftime('%Y-%m-%d %H:00:00','now'),'-23 hours')", buckets: 24, unit: 'hour' },
+  '7d': { label: '最近 7 天', windowStart: "datetime(date('now','+8 hours'),'-6 days','-8 hours')", buckets: 7, unit: 'day' },
+  '30d': { label: '最近 30 天', windowStart: "datetime(date('now','+8 hours'),'-29 days','-8 hours')", buckets: 30, unit: 'day' },
+  '90d': { label: '最近 90 天', windowStart: "datetime(date('now','+8 hours'),'-89 days','-8 hours')", buckets: 90, unit: 'day' }
+}
+
+export function normalizeStatsRange(value?: string): StatsRange {
+  return value && Object.prototype.hasOwnProperty.call(RANGE_CONFIG, value) ? value as StatsRange : '24h'
+}
 
 function deviceFromUserAgent(userAgent: string): 'desktop' | 'mobile' | 'tablet' {
   if (/ipad|tablet|kindle|silk/i.test(userAgent)) return 'tablet'
@@ -61,36 +74,47 @@ async function count(c: Context<{ Bindings: Env }>, sql: string): Promise<number
   return numberValue(row?.views)
 }
 
-function last30Utc8Days(): string[] {
-  const today = new Date(Date.now() + 8 * 60 * 60 * 1000)
-  return Array.from({ length: 30 }, (_, index) => {
-    const date = new Date(today)
-    date.setUTCDate(today.getUTCDate() - (29 - index))
-    return date.toISOString().slice(0, 10)
+function trendKeys(range: StatsRange): string[] {
+  const config = RANGE_CONFIG[range]
+  const now = new Date(Date.now() + 8 * 60 * 60 * 1000)
+  now.setUTCMinutes(0, 0, 0)
+  return Array.from({ length: config.buckets }, (_, index) => {
+    const date = new Date(now)
+    if (config.unit === 'hour') date.setUTCHours(now.getUTCHours() - (config.buckets - 1 - index))
+    else date.setUTCDate(now.getUTCDate() - (config.buckets - 1 - index))
+    return config.unit === 'hour' ? `${date.toISOString().slice(0, 13)}:00` : date.toISOString().slice(0, 10)
   })
 }
 
-export async function getPublicStats(c: Context<{ Bindings: Env }>): Promise<StatsReport> {
-  const [total, today, last30Days, dailyRows, pageRows, referrerRows, deviceRows] = await Promise.all([
+export async function getPublicStats(c: Context<{ Bindings: Env }>, requestedRange?: string): Promise<StatsReport> {
+  const range = normalizeStatsRange(requestedRange)
+  const config = RANGE_CONFIG[range]
+  const windowSql = `created_at>=${config.windowStart}`
+  const groupExpression = config.unit === 'hour'
+    ? "strftime('%Y-%m-%dT%H:00',created_at,'+8 hours')"
+    : "date(created_at,'+8 hours')"
+  const [total, today, periodViews, trendRows, pageRows, referrerRows, deviceRows] = await Promise.all([
     count(c, 'SELECT COUNT(*) AS views FROM page_views'),
     count(c, "SELECT COUNT(*) AS views FROM page_views WHERE date(created_at,'+8 hours')=date('now','+8 hours')"),
-    count(c, "SELECT COUNT(*) AS views FROM page_views WHERE created_at>=datetime('now','-30 days')"),
-    c.env.DB.prepare(`SELECT date(created_at,'+8 hours') AS label, COUNT(*) AS views
-      FROM page_views WHERE created_at>=datetime('now','-30 days') GROUP BY label ORDER BY label`).all<StatItem>(),
+    count(c, `SELECT COUNT(*) AS views FROM page_views WHERE ${windowSql}`),
+    c.env.DB.prepare(`SELECT ${groupExpression} AS label, COUNT(*) AS views
+      FROM page_views WHERE ${windowSql} GROUP BY label ORDER BY label`).all<StatItem>(),
     c.env.DB.prepare(`SELECT path AS label, COUNT(*) AS views FROM page_views
-      WHERE created_at>=datetime('now','-30 days') GROUP BY path ORDER BY views DESC, path LIMIT 10`).all<StatItem>(),
+      WHERE ${windowSql} GROUP BY path ORDER BY views DESC, path LIMIT 10`).all<StatItem>(),
     c.env.DB.prepare(`SELECT COALESCE(referrer_host,'直接访问') AS label, COUNT(*) AS views FROM page_views
-      WHERE created_at>=datetime('now','-30 days') GROUP BY referrer_host ORDER BY views DESC LIMIT 8`).all<StatItem>(),
+      WHERE ${windowSql} GROUP BY referrer_host ORDER BY views DESC LIMIT 8`).all<StatItem>(),
     c.env.DB.prepare(`SELECT device AS label, COUNT(*) AS views FROM page_views
-      WHERE created_at>=datetime('now','-30 days') GROUP BY device ORDER BY views DESC`).all<StatItem>()
+      WHERE ${windowSql} GROUP BY device ORDER BY views DESC`).all<StatItem>()
   ])
 
-  const dailyMap = new Map(dailyRows.results.map(row => [row.label, numberValue(row.views)]))
+  const trendMap = new Map(trendRows.results.map(row => [row.label, numberValue(row.views)]))
   return {
     total,
     today,
-    last30Days,
-    daily: last30Utc8Days().map(date => ({ date, views: dailyMap.get(date) || 0 })),
+    range,
+    rangeLabel: config.label,
+    periodViews,
+    trend: trendKeys(range).map(key => ({ key, views: trendMap.get(key) || 0 })),
     topPages: pageRows.results.map(row => ({ label: row.label, views: numberValue(row.views) })),
     referrers: referrerRows.results.map(row => ({ label: row.label, views: numberValue(row.views) })),
     devices: deviceRows.results.map(row => ({ label: row.label, views: numberValue(row.views) })),

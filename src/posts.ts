@@ -17,6 +17,29 @@ function toSlug(title: string): string {
     .slice(0, 80) || 'post'
 }
 
+function normalizeCustomSlug(value: string): string {
+  return value
+    .trim()
+    .replace(/^\/+|\/+$/g, '')
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+}
+
+async function uniqueSlug(c: Context<{ Bindings: Env }>, base: string, excludeId?: number) {
+  let slug = base
+  let suffix = 2
+  while (await c.env.DB.prepare(`SELECT 1 FROM posts WHERE slug=?${excludeId ? ' AND id<>?' : ''}`)
+    .bind(...(excludeId ? [slug, excludeId] : [slug])).first()) {
+    const suffixText = `-${suffix++}`
+    slug = `${base.slice(0, 80 - suffixText.length)}${suffixText}`
+  }
+  return slug
+}
+
 export async function listPublicPosts(c: Context<{ Bindings: Env }>) {
   const { results } = await c.env.DB.prepare('SELECT * FROM posts WHERE published=1 ORDER BY created_at DESC').all<Post>()
   return results
@@ -26,7 +49,9 @@ type ActivityRow = Omit<PostActivity, 'changes'> & { changes: string }
 
 export async function listPublicPostActivities(c: Context<{ Bindings: Env }>) {
   const { results } = await c.env.DB.prepare(`
-    SELECT a.* FROM post_activities a
+    SELECT a.id, a.post_id, p.title AS post_title, p.slug AS post_slug,
+      a.event_type, a.changes, a.created_at
+    FROM post_activities a
     JOIN posts p ON p.id=a.post_id
     WHERE p.published=1
     ORDER BY a.created_at ASC, a.id ASC
@@ -51,13 +76,9 @@ export async function adminListPosts(c: Context<{ Bindings: Env }>) {
   return results
 }
 
-export async function createPost(c: Context<{ Bindings: Env }>, title: string, body: string, aiSummary: string | null, license: ArticleLicenseInput) {
-  const baseSlug = toSlug(title)
-  let slug = baseSlug
-  let suffix = 2
-  while (await c.env.DB.prepare('SELECT 1 FROM posts WHERE slug=?').bind(slug).first()) {
-    slug = `${baseSlug}-${suffix++}`
-  }
+export async function createPost(c: Context<{ Bindings: Env }>, title: string, requestedSlug: string, body: string, aiSummary: string | null, license: ArticleLicenseInput) {
+  const baseSlug = normalizeCustomSlug(requestedSlug) || toSlug(title)
+  const slug = await uniqueSlug(c, baseSlug)
   const normalized = normalizeArticleLicenseInput(license.license, license.customName, license.customText)
   await c.env.DB.prepare('INSERT INTO posts (title,slug,body,ai_summary,license,custom_license_name,custom_license_text) VALUES (?,?,?,?,?,?,?)')
     .bind(title, slug, body, aiSummary, normalized.license, normalized.customName, normalized.customText).run()
@@ -90,9 +111,10 @@ function bodyChange(before: string, after: string): PostActivityChanges['body'] 
   return { removed: removed.text, added: added.text, truncated: removed.truncated || added.truncated }
 }
 
-export function describePostChanges(existing: Pick<Post, 'title' | 'body' | 'license' | 'custom_license_name' | 'custom_license_text'>, title: string, body: string, license: ArticleLicenseInput): PostActivityChanges {
+export function describePostChanges(existing: Pick<Post, 'title' | 'slug' | 'body' | 'license' | 'custom_license_name' | 'custom_license_text'>, title: string, slug: string, body: string, license: ArticleLicenseInput): PostActivityChanges {
   const changes: PostActivityChanges = {}
   if (existing.title !== title) changes.title = { before: existing.title, after: title }
+  if (existing.slug !== slug) changes.slug = { before: existing.slug, after: slug }
   if (existing.body !== body) changes.body = bodyChange(existing.body, body)
   const oldLicense = normalizeArticleLicense(existing.license)
   const oldCustomName = existing.custom_license_name ?? ''
@@ -109,20 +131,22 @@ export function describePostChanges(existing: Pick<Post, 'title' | 'body' | 'lic
   return changes
 }
 
-export async function updatePost(c: Context<{ Bindings: Env }>, existing: Post, title: string, body: string, aiSummary: string | null, license: ArticleLicenseInput) {
+export async function updatePost(c: Context<{ Bindings: Env }>, existing: Post, title: string, requestedSlug: string, body: string, aiSummary: string | null, license: ArticleLicenseInput) {
+  const baseSlug = normalizeCustomSlug(requestedSlug) || toSlug(title)
+  const slug = await uniqueSlug(c, baseSlug, existing.id)
   const normalizedLicense = normalizeArticleLicenseInput(license.license, license.customName, license.customText)
-  const changes = describePostChanges(existing, title, body, normalizedLicense)
-  if (!changes.title && !changes.body && !changes.license) return false
+  const changes = describePostChanges(existing, title, slug, body, normalizedLicense)
+  if (!changes.title && !changes.slug && !changes.body && !changes.license) return false
 
   const statements = [
-    c.env.DB.prepare('UPDATE posts SET title=?,body=?,ai_summary=?,license=?,custom_license_name=?,custom_license_text=? WHERE id=?')
-      .bind(title, body, aiSummary, normalizedLicense.license, normalizedLicense.customName, normalizedLicense.customText, existing.id)
+    c.env.DB.prepare('UPDATE posts SET title=?,slug=?,body=?,ai_summary=?,license=?,custom_license_name=?,custom_license_text=? WHERE id=?')
+      .bind(title, slug, body, aiSummary, normalizedLicense.license, normalizedLicense.customName, normalizedLicense.customText, existing.id)
   ]
   if (existing.published) {
     statements.push(c.env.DB.prepare(`
       INSERT INTO post_activities (post_id,post_title,post_slug,event_type,changes)
       VALUES (?,?,?,?,?)
-    `).bind(existing.id, title, existing.slug, 'updated', JSON.stringify(changes)))
+    `).bind(existing.id, title, slug, 'updated', JSON.stringify(changes)))
   }
   await c.env.DB.batch(statements)
   return true

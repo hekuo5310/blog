@@ -1,9 +1,11 @@
 import { ARTICLE_LICENSES, CUSTOM_ARTICLE_LICENSE, DEFAULT_ARTICLE_LICENSE, articleLicenseDisplayName, getArticleLicense } from './licenses'
+import { currentUtc8Year, databaseUtcToIso, formatUtc8Date, formatUtc8DateTime } from './time'
 
 export type Post = { id: number; title: string; slug: string; body: string; published: number; created_at: string; ai_summary?: string | null; license?: string | null; custom_license_name?: string | null; custom_license_text?: string | null }
 export type PostActivityChanges = {
   published?: boolean
   title?: { before: string; after: string }
+  slug?: { before: string; after: string }
   body?: { removed: string; added: string; truncated: boolean }
   license?: { before: string; after: string; customTextChanged?: boolean }
 }
@@ -274,7 +276,7 @@ ${body}
   </div>
 </div>
 <footer class="site-footer">
-<script>document.write('© 2026' + (new Date().getFullYear()>2026 ? '~'+new Date().getFullYear() : '') + ' hekuo')</script>
+<script>(function(){var y=new Date(Date.now()+28800000).getUTCFullYear();document.write('© 2026'+(y>2026?'~'+y:'')+' hekuo')})()</script>
 <div style="margin-top:.5rem;display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap"><a href="/terms">用户协议</a><a href="/privacy">隐私协议</a></div>
 </footer>
 <script id="update-data" type="application/json">${updateJson.replace(/</g, '\\u003c')}</script>
@@ -329,9 +331,9 @@ ${body}
   function formatTime(value){
     var time=toTime(value);
     if(!Number.isFinite(time))return value;
-    var d=new Date(time);
+    var d=new Date(time+28800000);
     var pad=function(n){return String(n).padStart(2,'0')};
-    return d.getFullYear()+'/'+pad(d.getMonth()+1)+'/'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+    return d.getUTCFullYear()+'/'+pad(d.getUTCMonth()+1)+'/'+pad(d.getUTCDate())+' '+pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+':'+pad(d.getUTCSeconds());
   }
   function syncButton(){
     if(!subBtn)return;
@@ -472,7 +474,7 @@ const MARKDOWN_SCRIPT = `<script>
 </script>`
 
 function updateItems(posts: Post[]): UpdateItem[] {
-  return posts.map(p => ({ title: p.title, url: `/post/${p.slug}`, createdAt: p.created_at }))
+  return posts.map(p => ({ title: p.title, url: `/post/${encodeURIComponent(p.slug)}`, createdAt: databaseUtcToIso(p.created_at) }))
 }
 
 function editorWidget(title: string, body: string, hasSlug: boolean): string {
@@ -552,7 +554,9 @@ render();
 }
 
 function heatmap(activities: PostActivity[]): string {
-  const activitiesJson = JSON.stringify(activities).replace(/</g, '\\u003c')
+  const localizedActivities = activities.map(activity => ({ ...activity, created_at: formatUtc8DateTime(activity.created_at) }))
+  const activitiesJson = JSON.stringify(localizedActivities).replace(/</g, '\\u003c')
+  const utc8Year = currentUtc8Year()
   return `<div class="heatmap-wrap">
 <div class="heatmap-title">
   <span>文章发布与修改</span>
@@ -577,7 +581,7 @@ const MONTHS=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10
 const byDate={};
 activities.forEach(item=>{const key=item.created_at.slice(0,10);(byDate[key]||(byDate[key]=[])).push(item)});
 const activityYears=Object.keys(byDate).map(d=>d.slice(0,4));
-const allYears=[...new Set([...activityYears,String(new Date().getFullYear())])].sort();
+const allYears=[...new Set([...activityYears,String(${utc8Year})])].sort();
 let curYear=Number(allYears[allYears.length-1]);
 
 function h(value){
@@ -599,6 +603,9 @@ function eventHtml(item){
   if(item.event_type==='published') detail='<p class="hm-publish-note">文章在这一天发布。</p>';
   if(changes.title){
     detail+='<p class="hm-change-title"><strong>标题：</strong><del>'+h(changes.title.before)+'</del> → <ins>'+h(changes.title.after)+'</ins></p>';
+  }
+  if(changes.slug){
+    detail+='<p class="hm-change-title"><strong>路径：</strong><del>'+h(changes.slug.before)+'</del> → <ins>'+h(changes.slug.after)+'</ins></p>';
   }
   if(changes.body){
     detail+='<div class="hm-diff">'+diffBlock('removed','删除',changes.body.removed)+diffBlock('added','新增',changes.body.added)+'</div>';
@@ -665,8 +672,8 @@ render(curYear);
 export function postList(posts: Post[], activities: PostActivity[], cfg: SiteConfig = DEFAULT_CONFIG): string {
   const items = posts.length
     ? posts.map(p => `<div class="post-item">
-  <div class="post-date">${p.created_at.slice(0, 10)}</div>
-  <div><a href="/post/${p.slug}" class="post-title">${esc(p.title)}</a><div class="post-excerpt">${excerpt(p.body)}</div></div>
+  <div class="post-date">${formatUtc8Date(p.created_at)}</div>
+  <div><a href="/post/${encodeURIComponent(p.slug)}" class="post-title">${esc(p.title)}</a><div class="post-excerpt">${excerpt(p.body)}</div></div>
 </div>`).join('')
     : '<p style="color:#aaa;padding:2rem 0">暂无文章</p>'
 
@@ -693,7 +700,7 @@ export function postDetail(post: Post, cfg: SiteConfig = DEFAULT_CONFIG, giscus?
 
   const body = `<div class="wrap"><div class="article">
 <h1>${esc(post.title)}</h1>
-<div class="article-meta">${post.created_at.slice(0, 10)} · 协议：${licenseHtml}</div>
+<div class="article-meta">${formatUtc8Date(post.created_at)} · 协议：${licenseHtml}</div>
 <div class="article-body" id="post-body"></div>
 <script src="https://cdn.jsdelivr.net/npm/marked@18.0.6/lib/marked.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
@@ -772,7 +779,7 @@ export function adminDashboard(posts: Post[]): string {
   const rows = posts.map(p => `<tr>
 <td>${esc(p.title)}</td>
 <td><span class="badge ${p.published ? 'pub' : ''}">${p.published ? '已发布' : '草稿'}</span></td>
-<td style="color:#aaa;font-size:.82rem">${p.created_at.slice(0, 10)}</td>
+<td style="color:#aaa;font-size:.82rem">${formatUtc8Date(p.created_at)}</td>
 <td class="actions">
   <a href="/admin/post/${p.id}/edit"><button class="btn btn-sm btn-ghost">编辑</button></a>
   <form method="post" action="/admin/post/${p.id}/publish" style="display:inline"><button class="btn btn-sm btn-ghost">${p.published ? '取消' : '发布'}</button></form>
@@ -908,6 +915,9 @@ export function postForm(post?: Post): string {
   return layout(post ? '编辑文章' : '新建文章', `<div class="admin-wrap"><h1>${post ? '编辑文章' : '新建文章'}</h1>
 <form method="post" action="${action}" id="pf">
   ${editorWidget(post?.title ?? '', post?.body ?? '', false)}
+  <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">文章路径
+    <input class="pf-input" name="slug" maxlength="80" value="${esc(post?.slug ?? '')}" style="margin-top:.35rem" placeholder="留空则根据标题自动生成拼音路径" autocomplete="off">
+  </label>
   <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">文章协议
     <select class="pf-input" id="article-license" name="license" style="margin-top:.35rem">${licenseOptions}</select>
   </label>

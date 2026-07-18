@@ -30,12 +30,12 @@ export async function deleteSession(c: Context<{ Bindings: Env }>): Promise<void
   if (token) await c.env.SESSIONS.delete(token)
 }
 
-export function sessionCookie(token: string): string {
-  return `session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=86400`
+export function sessionCookie(token: string, secure = true): string {
+  return `session=${token}; HttpOnly${secure ? '; Secure' : ''}; SameSite=Strict; Path=/; Max-Age=86400`
 }
 
-export function clearCookie(): string {
-  return `session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`
+export function clearCookie(secure = true): string {
+  return `session=; HttpOnly${secure ? '; Secure' : ''}; SameSite=Strict; Path=/; Max-Age=0`
 }
 
 async function loginAttemptKey(c: Context<{ Bindings: Env }>): Promise<string> {

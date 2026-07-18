@@ -8,6 +8,7 @@ import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getP
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries } from './ai-summary'
 import { normalizeArticleLicenseInput } from './licenses'
+import { databaseUtcToIso, parseDatabaseUtc } from './time'
 
 export type Env = {
   DB: D1Database
@@ -27,6 +28,10 @@ export type Env = {
 }
 
 const app = new Hono<{ Bindings: Env }>()
+
+function usesSecureCookies(c: Context): boolean {
+  return new URL(c.req.url).protocol === 'https:'
+}
 
 app.use('*', async (c, next) => {
   await next()
@@ -63,8 +68,7 @@ function xmlEscape(value: string): string {
 }
 
 function rssDate(value: string): string {
-  const normalized = value.includes('T') ? value : value.replace(' ', 'T') + 'Z'
-  const date = new Date(normalized)
+  const date = parseDatabaseUtc(value)
   return Number.isNaN(date.getTime()) ? new Date().toUTCString() : date.toUTCString()
 }
 
@@ -107,7 +111,7 @@ app.get('/', async (c) => {
 
 app.get('/updates.json', async (c) => {
   const posts = await listPublicPosts(c)
-  return c.json(posts.map(p => ({ title: p.title, url: `/post/${p.slug}`, createdAt: p.created_at })))
+  return c.json(posts.map(p => ({ title: p.title, url: `/post/${encodeURIComponent(p.slug)}`, createdAt: databaseUtcToIso(p.created_at) })))
 })
 
 app.get('/rss.xml', rssFeed)
@@ -149,12 +153,12 @@ app.post('/admin/login', async (c) => {
   }
   await clearLoginFailures(c)
   const token = await createSession(c.env)
-  return new Response(null, { status: 302, headers: { Location: '/admin', 'Set-Cookie': sessionCookie(token) } })
+  return new Response(null, { status: 302, headers: { Location: '/admin', 'Set-Cookie': sessionCookie(token, usesSecureCookies(c)) } })
 })
 
 app.post('/admin/logout', async (c) => {
   await deleteSession(c)
-  return new Response(null, { status: 302, headers: { Location: '/', 'Set-Cookie': clearCookie() } })
+  return new Response(null, { status: 302, headers: { Location: '/', 'Set-Cookie': clearCookie(usesSecureCookies(c)) } })
 })
 
 // admin settings
@@ -189,12 +193,13 @@ app.get('/admin/post/new', (c) => c.html(postForm()))
 app.post('/admin/post', async (c) => {
   const form = await c.req.formData()
   const title = (form.get('title') as string ?? '').trim().slice(0, 200)
+  const slug = (form.get('slug') as string ?? '').trim()
   const body = (form.get('body') as string ?? '').replace(/\r\n/g,'\n').trim().slice(0, 200000)
   const license = normalizeArticleLicenseInput(form.get('license'), form.get('custom_license_name'), form.get('custom_license_text'))
   if (!title || !body) return c.redirect('/admin/post/new')
   const blocks = extractAiSummaryBlocks(body)
   const summaries = blocks.length ? await generateSummaries(c.env, blocks) : []
-  await createPost(c, title, body, JSON.stringify(summaries), license)
+  await createPost(c, title, slug, body, JSON.stringify(summaries), license)
   return c.redirect('/admin')
 })
 
@@ -210,6 +215,7 @@ app.post('/admin/post/:id', async (c) => {
   if (!existing) return c.notFound()
   const form = await c.req.formData()
   const title = (form.get('title') as string ?? '').trim().slice(0, 200)
+  const slug = (form.get('slug') as string ?? '').trim()
   const body = (form.get('body') as string ?? '').replace(/\r\n/g,'\n').trim().slice(0, 200000)
   const license = normalizeArticleLicenseInput(form.get('license'), form.get('custom_license_name'), form.get('custom_license_text'))
   if (!title || !body) return c.redirect(`/admin/post/${c.req.param('id')}/edit`)
@@ -224,7 +230,7 @@ app.post('/admin/post/:id', async (c) => {
       summaries = await generateSummaries(c.env, newBlocks)
     }
   }
-  await updatePost(c, existing, title, body, newBlocks.length ? JSON.stringify(summaries) : null, license)
+  await updatePost(c, existing, title, slug, body, newBlocks.length ? JSON.stringify(summaries) : null, license)
   await deleteRemovedImages(c.env, existing.body, body)
   return c.redirect('/admin')
 })

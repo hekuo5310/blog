@@ -223,8 +223,6 @@ a:hover{opacity:.7}
 .stats-bar-value{font-size:.62rem;color:var(--faint);font-variant-numeric:tabular-nums;overflow:hidden}
 .stats-bar-track{height:120px;display:flex;align-items:end;background:var(--bg-soft);border-radius:3px 3px 0 0;overflow:hidden}
 .stats-bar{display:block;width:100%;background:var(--accent);min-height:0}
-.stats-bar-col:nth-child(3n) .stats-bar{background:var(--hm-3)}
-.stats-bar-col:nth-child(5n) .stats-bar{background:#d97706}
 .stats-bar-date{font-size:.6rem;color:var(--faint);white-space:nowrap}
 .stats-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:2rem}
 .stats-list{list-style:none}

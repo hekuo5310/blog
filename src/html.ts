@@ -163,6 +163,9 @@ a:hover{opacity:.7}
 .post-excerpt{font-size:.88rem;color:var(--muted);line-height:1.5}
 
 /* article */
+.article-wrap{max-width:1200px}
+.article-layout{display:grid;grid-template-columns:minmax(0,820px) 220px;gap:3rem;justify-content:center;align-items:start}
+.article-layout.no-toc{grid-template-columns:minmax(0,836px)}
 .article{padding:2rem 0}
 .article h1{font-size:2rem;font-weight:700;margin-bottom:.5rem}
 .article-meta{color:var(--faint);font-size:.85rem;margin-bottom:2rem}
@@ -171,7 +174,7 @@ a:hover{opacity:.7}
 .custom-license h2{font-size:1rem;margin-bottom:.65rem}
 .custom-license-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.86rem;line-height:1.65;color:var(--muted)}
 .article-body{line-height:1.8;font-size:1rem;color:var(--text-soft)}
-.article-body h1,.article-body h2,.article-body h3{margin:1.5rem 0 .5rem;font-weight:600}
+.article-body h1,.article-body h2,.article-body h3,.article-body h4{margin:1.5rem 0 .5rem;font-weight:600;scroll-margin-top:5rem}
 .article-body p{margin:.75rem 0}
 .article-body pre{background:var(--pre-bg);padding:1rem;border-radius:6px;overflow-x:auto;margin:.75rem 0}
 .article-body code{background:var(--code-bg);padding:.1rem .3rem;border-radius:3px;font-size:.9em}
@@ -198,6 +201,16 @@ a:hover{opacity:.7}
 .ai-summary-box{margin-top:1rem;padding:.9rem 1.1rem;border:1px solid var(--input-border);border-left:3px solid var(--accent);border-radius:6px;background:var(--bg-soft)}
 .ai-summary-label{display:inline-block;font-size:.78rem;font-weight:600;color:var(--accent);margin-bottom:.4rem;letter-spacing:.03em}
 .ai-summary-text{font-size:.92rem;line-height:1.7;color:var(--text-soft);white-space:pre-wrap;overflow-wrap:anywhere}
+.article-toc{position:sticky;top:5.25rem;max-height:calc(100vh - 6.5rem);overflow-y:auto;margin-top:2.5rem;padding-left:1rem;border-left:1px solid var(--border)}
+.article-toc[hidden]{display:none}
+.article-toc-title{display:block;margin-bottom:.6rem;font-size:.78rem;font-weight:600;color:var(--text)}
+.article-toc-nav{display:flex;flex-direction:column;gap:.1rem}
+.article-toc-link{display:block;padding:.24rem 0;font-size:.76rem;line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
+.article-toc-link:hover{color:var(--text);opacity:1}
+.article-toc-link[aria-current="location"]{color:var(--accent);font-weight:600}
+.article-toc-link.toc-level-3{padding-left:.8rem}
+.article-toc-link.toc-level-4{padding-left:1.6rem}
+@media(max-width:1099px){.article-layout{display:block}.article-toc{display:none}}
 
 /* public stats */
 .stats-page{padding:2.5rem 0 1rem}
@@ -510,6 +523,60 @@ const MARKDOWN_SCRIPT = `<script>
     }).join('');
     return sanitize(html+'<section class="footnotes" data-footnotes><h2 id="'+prefix+'-footnote-label" style="position:absolute;left:-9999px">脚注</h2><ol>'+items+'</ol></section>');
   };
+})();
+</script>`
+
+const ARTICLE_TOC = `<aside class="article-toc" id="article-toc" aria-label="本页导航" hidden>
+  <strong class="article-toc-title">本页导航</strong>
+  <nav class="article-toc-nav" id="article-toc-nav"></nav>
+</aside>`
+
+const ARTICLE_TOC_SCRIPT = `<script>
+(function(){
+  var body=document.getElementById('post-body');
+  var aside=document.getElementById('article-toc');
+  var nav=document.getElementById('article-toc-nav');
+  if(!body||!aside||!nav)return;
+  var headings=Array.from(body.querySelectorAll('h2,h3,h4')).filter(function(heading){return !heading.closest('.footnotes');});
+  if(!headings.length){var layout=body.closest('.article-layout');if(layout)layout.classList.add('no-toc');return;}
+  var used=Object.create(null);
+  function slugify(text){
+    var slug=text.trim().toLowerCase().replace(/\\s+/g,'-').replace(/[^a-z0-9\\u4e00-\\u9fff_-]/g,'').replace(/-+/g,'-').replace(/^-|-$/g,'');
+    return slug||'section';
+  }
+  headings.forEach(function(heading){
+    var base=heading.id||slugify(heading.textContent||'');
+    var count=used[base]||0;
+    used[base]=count+1;
+    heading.id=count?base+'-'+(count+1):base;
+    var link=document.createElement('a');
+    link.className='article-toc-link toc-level-'+heading.tagName.slice(1);
+    link.href='#'+encodeURIComponent(heading.id);
+    link.textContent=heading.textContent||heading.id;
+    nav.appendChild(link);
+  });
+  var links=Array.from(nav.querySelectorAll('a'));
+  var ticking=false;
+  function syncActive(){
+    ticking=false;
+    var active=0;
+    for(var i=0;i<headings.length;i++){
+      if(headings[i].getBoundingClientRect().top<=110)active=i;else break;
+    }
+    links.forEach(function(link,index){
+      if(index===active)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current');
+    });
+  }
+  function onScroll(){if(!ticking){ticking=true;requestAnimationFrame(syncActive);}}
+  aside.hidden=false;
+  window.addEventListener('scroll',onScroll,{passive:true});
+  syncActive();
+  if(location.hash){
+    try{
+      var target=document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if(target)requestAnimationFrame(function(){target.scrollIntoView();});
+    }catch(error){}
+  }
 })();
 </script>`
 
@@ -857,7 +924,7 @@ export function postDetail(post: Post, cfg: SiteConfig = DEFAULT_CONFIG, giscus?
     ? `<section class="custom-license"><h2>${esc(licenseDisplayName)}</h2><div class="custom-license-text">${esc(post.custom_license_text)}</div></section>`
     : ''
 
-  const body = `<div class="wrap"><div class="article">
+  const body = `<div class="wrap article-wrap"><div class="article-layout"><div class="article">
 <h1>${esc(post.title)}</h1>
 <div class="article-meta">${formatUtc8Date(post.created_at)} · 协议：${licenseHtml}</div>
 <div class="article-body" id="post-body"></div>
@@ -887,7 +954,8 @@ ${customLicenseBlock}
 <div class="comments">
   ${giscusComments}
 </div>
-</div></div>`
+</div>${ARTICLE_TOC}</div></div>
+${ARTICLE_TOC_SCRIPT}`
   return layout(post.title, body, false, undefined, cfg)
 }
 
@@ -981,14 +1049,15 @@ export function adminPageDashboard(pages: PageItem[]): string {
 }
 
 export function pageDetail(page: PageItem, cfg: SiteConfig = DEFAULT_CONFIG): string {
-  const body = `<div class="wrap"><div class="article">
+  const body = `<div class="wrap article-wrap"><div class="article-layout"><div class="article">
 <h1>${esc(page.title)}</h1>
 <div class="article-body" id="post-body"></div>
 <script src="https://cdn.jsdelivr.net/npm/marked@18.0.6/lib/marked.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
 ${MARKDOWN_SCRIPT}
 <script>document.getElementById('post-body').innerHTML=window.renderMarkdown(${jsonForScript(page.body)});</script>
-</div></div>`
+</div>${ARTICLE_TOC}</div></div>
+${ARTICLE_TOC_SCRIPT}`
   return layout(page.title, body, false, undefined, cfg)
 }
 
@@ -1063,7 +1132,8 @@ export function privacyPage(cfg: SiteConfig = DEFAULT_CONFIG): string {
 }
 
 function legalPage(title: string, content: string, cfg: SiteConfig): string {
-  return layout(title, `<div class="wrap"><div class="article"><h1>${esc(title)}</h1><div class="article-body">${content}</div></div></div>`, false, undefined, cfg)
+  const body = `<div class="wrap article-wrap"><div class="article-layout"><div class="article"><h1>${esc(title)}</h1><div class="article-body" id="post-body">${content}</div></div>${ARTICLE_TOC}</div></div>${ARTICLE_TOC_SCRIPT}`
+  return layout(title, body, false, undefined, cfg)
 }
 
 export function postForm(post?: Post): string {

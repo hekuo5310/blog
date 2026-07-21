@@ -330,7 +330,7 @@ ${body}
 </div>
 <footer class="site-footer">
 <script>(function(){var y=new Date(Date.now()+28800000).getUTCFullYear();document.write('© 2026'+(y>2026?'~'+y:'')+' hekuo')})()</script>
-<div style="margin-top:.5rem;display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap"><a href="/terms">用户协议</a><a href="/privacy">隐私协议</a></div>
+<div style="margin-top:.5rem;display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap"><a href="/terms">用户协议</a><a href="/privacy">隐私协议</a>|<a href="https://icp.gov.moe/?keyword=20262200" target="_blank">萌ICP备20262200号</a></div>
 </footer>
 <script id="update-data" type="application/json">${updateJson.replace(/</g, '\\u003c')}</script>
 <script>

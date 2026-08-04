@@ -455,10 +455,81 @@ ${body}
 </body></html>`
 }
 
+function markdownLinksToText(markdown: string): string {
+  let output = ''
+  let index = 0
+  while (index < markdown.length) {
+    const isImage = markdown[index] === '!' && markdown[index + 1] === '['
+    if (!isImage && markdown[index] !== '[') {
+      output += markdown[index++]
+      continue
+    }
+
+    const labelStart = index + (isImage ? 2 : 1)
+    let labelEnd = labelStart
+    while (labelEnd < markdown.length && (markdown[labelEnd] !== ']' || markdown[labelEnd - 1] === '\\')) labelEnd++
+    if (labelEnd >= markdown.length) {
+      output += markdown[index++]
+      continue
+    }
+
+    const destinationStart = labelEnd + 1
+    if (markdown[destinationStart] === '(') {
+      let depth = 1
+      let cursor = destinationStart + 1
+      while (cursor < markdown.length && depth > 0) {
+        if (markdown[cursor] === '\\') cursor++
+        else if (markdown[cursor] === '(') depth++
+        else if (markdown[cursor] === ')') depth--
+        cursor++
+      }
+      if (depth === 0) {
+        output += markdown.slice(labelStart, labelEnd)
+        index = cursor
+        continue
+      }
+    } else if (markdown[destinationStart] === '[') {
+      const referenceEnd = markdown.indexOf(']', destinationStart + 1)
+      if (referenceEnd !== -1) {
+        output += markdown.slice(labelStart, labelEnd)
+        index = referenceEnd + 1
+        continue
+      }
+    }
+
+    output += markdown[index++]
+  }
+  return output
+}
+
 function excerpt(md: string, len = 120): string {
-  const text = md
-    .replace(/\[\/?ai-summary\]/gi, '')
-    .replace(/[#*`_\[\]]/g, '')
+  const text = markdownLinksToText(md
+    .replace(/<!--[^]*?-->/g, ' ')
+    .replace(/<(script|style)\b[^>]*>[^]*?<\/\1>/gi, ' ')
+    .replace(/^\s{0,3}\[[^\]]+\]:\s+\S+.*$/gm, ' ')
+    .replace(/```[^\n]*\n([^]*?)```/g, '$1')
+    .replace(/~~~[^\n]*\n([^]*?)~~~/g, '$1')
+    .replace(/\[details\s*=\s*"([^"]*)"\]/gi, '$1 ')
+    .replace(/\[\/?(?:ai-summary|spoiler|details)\]/gi, ' ')
+    .replace(/\^\[[^\]]*\]/g, ' ')
+  )
+    .replace(/<https?:\/\/[^>]+>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?)/gm, '')
+    .replace(/\s+#+\s*$/gm, '')
+    .replace(/^\s*[-+*]\s+\[[ xX]\]\s+/gm, '')
+    .replace(/^\s*(?:[-+*]|\d+[.)])\s+/gm, '')
+    .replace(/^\s*(?:(?:[-*_]\s*){3,}|=+)$/gm, ' ')
+    .replace(/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/gm, ' ')
+    .replace(/\|/g, ' ')
+    .replace(/[*_~`]+/g, '')
+    .replace(/\\([\\`*{}\[\]()#+\-.!_>~|])/g, '$1')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#(?:39|x27);/gi, "'")
     .replace(/\s+/g, ' ')
     .trim()
   return esc(text.slice(0, len)) + (text.length > len ? '…' : '')

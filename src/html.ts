@@ -2,7 +2,7 @@ import { ARTICLE_LICENSES, CUSTOM_ARTICLE_LICENSE, DEFAULT_ARTICLE_LICENSE, arti
 import { currentUtc8Year, databaseUtcToIso, formatUtc8Date, formatUtc8DateTime } from './time'
 import type { StatItem, StatsReport } from './analytics'
 
-export type Post = { id: number; title: string; slug: string; body: string; published: number; created_at: string; ai_summary?: string | null; license?: string | null; custom_license_name?: string | null; custom_license_text?: string | null }
+export type Post = { id: number; title: string; slug: string; body: string; published: number; created_at: string; tags?: string | null; ai_summary?: string | null; license?: string | null; custom_license_name?: string | null; custom_license_text?: string | null }
 export type PostActivityChanges = {
   published?: boolean
   title?: { before: string; after: string }
@@ -173,6 +173,7 @@ a:hover{opacity:.7}
 .article h1{font-size:2rem;font-weight:700;margin-bottom:.5rem}
 .article-meta{color:var(--faint);font-size:.85rem;margin-bottom:2rem}
 .article-meta a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.post-tags{display:flex;gap:.4rem;flex-wrap:wrap;margin:.65rem 0 1.4rem}.post-tag{font-size:.78rem;padding:.18rem .48rem;border-radius:999px;background:var(--bg-soft);border:1px solid var(--border);color:var(--muted)}.post-tag:hover{color:var(--accent);opacity:1}
 .article-tools{display:flex;align-items:center;gap:.65rem;margin:-1.15rem 0 1.75rem;font-size:.82rem;color:var(--muted)}
 .article-copy-link{border:1px solid var(--input-border);border-radius:5px;padding:.22rem .5rem;background:var(--surface);color:var(--text-soft);font:inherit;cursor:pointer}.article-copy-link:hover{background:var(--bg-soft)}
 .reading-progress{position:fixed;top:0;left:0;width:0;height:3px;background:var(--accent);z-index:200;transition:width .08s linear}
@@ -1022,6 +1023,7 @@ export function statsPage(report: StatsReport, cfg: SiteConfig = DEFAULT_CONFIG)
 }
 
 export function postDetail(post: Post, cfg: SiteConfig = DEFAULT_CONFIG, giscus?: GiscusConfig | null): string {
+  let tags: string[]=[]; try{const value=JSON.parse(post.tags||'[]');tags=Array.isArray(value)?value.filter((tag:any)=>typeof tag==='string'):[]}catch{}
   let summaries: string[] = []
   try { const a = post.ai_summary ? JSON.parse(post.ai_summary) : []; summaries = Array.isArray(a) ? a.map((s: any) => typeof s === 'string' ? s : '') : [] } catch { summaries = [] }
   const giscusComments = giscusWidget(giscus)
@@ -1037,6 +1039,7 @@ export function postDetail(post: Post, cfg: SiteConfig = DEFAULT_CONFIG, giscus?
   const body = `<div class="wrap article-wrap"><div class="article-layout"><div class="article">
 <h1>${esc(post.title)}</h1>
 <div class="article-meta">${formatUtc8Date(post.created_at)} · 协议：${licenseHtml}</div>
+${tags.length ? `<div class="post-tags">${tags.map(tag=>`<a class="post-tag" href="/search?q=${encodeURIComponent(tag)}"># ${esc(tag)}</a>`).join('')}</div>` : ''}
 <div class="article-tools"><span id="reading-time"></span><button class="article-copy-link" id="copy-link" type="button">复制链接</button></div>
 <div class="article-body" id="post-body"></div>
 <script src="https://cdn.jsdelivr.net/npm/marked@18.0.6/lib/marked.umd.js"></script>
@@ -1276,6 +1279,9 @@ export function postForm(post?: Post): string {
   </label>
   <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">文章协议
     <select class="pf-input" id="article-license" name="license" style="margin-top:.35rem">${licenseOptions}</select>
+  </label>
+  <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">标签（用逗号或换行分隔）
+    <input class="pf-input" name="tags" maxlength="300" value="${esc((()=>{try{return (JSON.parse(post?.tags||'[]')||[]).join(', ')}catch{return ''}})())}" style="margin-top:.35rem" placeholder="例如：Minecraft, 教程">
   </label>
   <div id="custom-license-fields"${customSelected ? '' : ' hidden'} style="margin-top:.75rem">
     <label style="display:block;font-size:.85rem;color:var(--muted)">自定义协议名称

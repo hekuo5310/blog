@@ -89,12 +89,12 @@ export async function adminListPosts(c: Context<{ Bindings: Env }>) {
   return results
 }
 
-export async function createPost(c: Context<{ Bindings: Env }>, title: string, requestedSlug: string, body: string, aiSummary: string | null, license: ArticleLicenseInput) {
+export function normalizeTags(raw: string): string[] { return [...new Set(raw.split(/[,，\n]/).map(tag=>tag.trim()).filter(Boolean).map(tag=>tag.slice(0,30)))].slice(0,12) }
+export async function createPost(c: Context<{ Bindings: Env }>, title: string, requestedSlug: string, body: string, aiSummary: string | null, license: ArticleLicenseInput, tags: string[] = []) {
   const baseSlug = normalizeCustomSlug(requestedSlug) || toSlug(title)
   const slug = await uniqueSlug(c, baseSlug)
   const normalized = normalizeArticleLicenseInput(license.license, license.customName, license.customText)
-  await c.env.DB.prepare('INSERT INTO posts (title,slug,body,ai_summary,license,custom_license_name,custom_license_text) VALUES (?,?,?,?,?,?,?)')
-    .bind(title, slug, body, aiSummary, normalized.license, normalized.customName, normalized.customText).run()
+  await c.env.DB.prepare('INSERT INTO posts (title,slug,body,ai_summary,license,custom_license_name,custom_license_text,tags) VALUES (?,?,?,?,?,?,?,?)').bind(title, slug, body, aiSummary, normalized.license, normalized.customName, normalized.customText, JSON.stringify(tags)).run()
   return slug
 }
 
@@ -144,7 +144,7 @@ export function describePostChanges(existing: Pick<Post, 'title' | 'slug' | 'bod
   return changes
 }
 
-export async function updatePost(c: Context<{ Bindings: Env }>, existing: Post, title: string, requestedSlug: string, body: string, aiSummary: string | null, license: ArticleLicenseInput) {
+export async function updatePost(c: Context<{ Bindings: Env }>, existing: Post, title: string, requestedSlug: string, body: string, aiSummary: string | null, license: ArticleLicenseInput, tags: string[] = []) {
   const baseSlug = normalizeCustomSlug(requestedSlug) || toSlug(title)
   const slug = await uniqueSlug(c, baseSlug, existing.id)
   const normalizedLicense = normalizeArticleLicenseInput(license.license, license.customName, license.customText)
@@ -152,8 +152,7 @@ export async function updatePost(c: Context<{ Bindings: Env }>, existing: Post, 
   if (!changes.title && !changes.slug && !changes.body && !changes.license) return false
 
   const statements = [
-    c.env.DB.prepare('UPDATE posts SET title=?,slug=?,body=?,ai_summary=?,license=?,custom_license_name=?,custom_license_text=? WHERE id=?')
-      .bind(title, slug, body, aiSummary, normalizedLicense.license, normalizedLicense.customName, normalizedLicense.customText, existing.id)
+    c.env.DB.prepare('UPDATE posts SET title=?,slug=?,body=?,ai_summary=?,license=?,custom_license_name=?,custom_license_text=?,tags=? WHERE id=?').bind(title, slug, body, aiSummary, normalizedLicense.license, normalizedLicense.customName, normalizedLicense.customText, JSON.stringify(tags), existing.id)
   ]
   if (existing.published) {
     statements.push(c.env.DB.prepare(`

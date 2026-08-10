@@ -1280,9 +1280,9 @@ export function postForm(post?: Post): string {
   <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">文章协议
     <select class="pf-input" id="article-license" name="license" style="margin-top:.35rem">${licenseOptions}</select>
   </label>
-  <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">标签（用逗号或换行分隔）
-    <input class="pf-input" name="tags" maxlength="300" value="${esc((()=>{try{return (JSON.parse(post?.tags||'[]')||[]).join(', ')}catch{return ''}})())}" style="margin-top:.35rem" placeholder="例如：Minecraft, 教程">
-  </label>
+  <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">标签</label>
+  <input class="pf-input" name="tags" id="tags-input" list="tag-options" maxlength="300" value="${esc((()=>{try{return (JSON.parse(post?.tags||'[]')||[]).join(', ')}catch{return ''}})())}" style="margin-top:.35rem" placeholder="选择已有标签，或输入新标签（逗号分隔）">
+  <datalist id="tag-options"></datalist>
   <div id="custom-license-fields"${customSelected ? '' : ' hidden'} style="margin-top:.75rem">
     <label style="display:block;font-size:.85rem;color:var(--muted)">自定义协议名称
       <input class="pf-input" name="custom_license_name" maxlength="120" value="${esc(post?.custom_license_name ?? '')}" style="margin-top:.35rem" placeholder="例如：站点文章共享协议">
@@ -1292,7 +1292,7 @@ export function postForm(post?: Post): string {
     </label>
   </div>
   <div style="margin-top:.75rem"><button class="btn" type="submit">保存</button></div>
-</form></div>
+</form><script>(function(){var list=document.getElementById('tag-options');if(!list)return;fetch('/admin/tags.json').then(function(r){return r.json()}).then(function(tags){if(!Array.isArray(tags))return;tags.forEach(function(tag){var option=document.createElement('option');option.value=tag;list.appendChild(option)})}).catch(function(){})})();</script></div>
 <script>(function(){var select=document.getElementById('article-license'),fields=document.getElementById('custom-license-fields');if(!select||!fields)return;function sync(){fields.hidden=select.value!=='${CUSTOM_ARTICLE_LICENSE}'}select.addEventListener('change',sync);sync()})();</script>`, true)
 }
 

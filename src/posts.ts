@@ -90,6 +90,11 @@ export async function adminListPosts(c: Context<{ Bindings: Env }>) {
 }
 
 export function normalizeTags(raw: string): string[] { return [...new Set(raw.split(/[,，\n]/).map(tag=>tag.trim()).filter(Boolean).map(tag=>tag.slice(0,30)))].slice(0,12) }
+export async function listTags(c: Context<{ Bindings: Env }>): Promise<string[]> {
+  const { results } = await c.env.DB.prepare('SELECT tags FROM posts WHERE tags IS NOT NULL').all<{ tags: string }>()
+  const tags = results.flatMap(row => { try { const value = JSON.parse(row.tags); return Array.isArray(value) ? value : [] } catch { return [] } })
+  return [...new Set(tags.filter((tag): tag is string => typeof tag === 'string'))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+}
 export async function createPost(c: Context<{ Bindings: Env }>, title: string, requestedSlug: string, body: string, aiSummary: string | null, license: ArticleLicenseInput, tags: string[] = []) {
   const baseSlug = normalizeCustomSlug(requestedSlug) || toSlug(title)
   const slug = await uniqueSlug(c, baseSlug)

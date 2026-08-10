@@ -45,6 +45,19 @@ export async function listPublicPosts(c: Context<{ Bindings: Env }>) {
   return results
 }
 
+export async function searchPublicPosts(c: Context<{ Bindings: Env }>, query: string) {
+  const normalized = query.trim().replace(/[%_]/g, '\\$&').slice(0, 100)
+  if (!normalized) return []
+  const pattern = `%${normalized}%`
+  const { results } = await c.env.DB.prepare(`
+    SELECT * FROM posts
+    WHERE published=1 AND (title LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\')
+    ORDER BY CASE WHEN title LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, created_at DESC
+    LIMIT 50
+  `).bind(pattern, pattern, pattern).all<Post>()
+  return results
+}
+
 type ActivityRow = Omit<PostActivity, 'changes'> & { changes: string }
 
 export async function listPublicPostActivities(c: Context<{ Bindings: Env }>) {

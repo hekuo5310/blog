@@ -6,7 +6,7 @@ import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, upd
 import { createSession, validateSession, deleteSession, sessionCookie, clearCookie, isLoginRateLimited, recordLoginFailure, clearLoginFailures } from './auth'
 import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts, normalizeTags, listTags } from './posts'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
-import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries } from './ai-summary'
+import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries, polishParagraphs } from './ai-summary'
 import { normalizeArticleLicenseInput } from './licenses'
 import { databaseUtcToIso, parseDatabaseUtc } from './time'
 import { getPublicStats, recordPageView, shouldRecordPageView } from './analytics'
@@ -250,6 +250,7 @@ app.post('/admin/settings', async (c) => {
 })
 
 app.post('/admin/images', uploadImage)
+app.post('/admin/polish', async (c) => { const body = await c.req.json<{ paragraphs?: string[] }>(); const paragraphs = (body.paragraphs || []).filter(p => typeof p === 'string').slice(0, 50); return c.json({ paragraphs: await polishParagraphs(c.env, paragraphs) }) })
 app.get('/admin/tags.json', async (c) => c.json(await listTags(c)))
 
 // admin posts

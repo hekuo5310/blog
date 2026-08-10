@@ -4,7 +4,7 @@ import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDas
 import type { GiscusConfig, SiteConfig, Post } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish } from './pages'
 import { createSession, validateSession, deleteSession, sessionCookie, clearCookie, isLoginRateLimited, recordLoginFailure, clearLoginFailures } from './auth'
-import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts } from './posts'
+import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts, normalizeTags } from './posts'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries } from './ai-summary'
 import { normalizeArticleLicenseInput } from './licenses'
@@ -30,9 +30,31 @@ export type Env = {
 
 const app = new Hono<{ Bindings: Env }>()
 
+let tagMigration: Promise<void> | null = null
+async function ensureTagMigration(env: Env): Promise<void> {
+  if (!tagMigration) {
+    tagMigration = (async () => {
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))" ).run()
+      const applied = await env.DB.prepare('SELECT 1 FROM schema_migrations WHERE name=?').bind('0011_post_tags').first()
+      if (applied) return
+      const columns = await env.DB.prepare('PRAGMA table_info(posts)').all<{ name: string }>()
+      if (!columns.results.some(column => column.name === 'tags')) {
+        await env.DB.prepare("ALTER TABLE posts ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'").run()
+      }
+      await env.DB.prepare('INSERT OR IGNORE INTO schema_migrations (name) VALUES (?)').bind('0011_post_tags').run()
+    })().catch(error => { tagMigration = null; throw error })
+  }
+  return tagMigration
+}
+
 function usesSecureCookies(c: Context): boolean {
   return new URL(c.req.url).protocol === 'https:'
 }
+
+app.use('*', async (c, next) => {
+  await ensureTagMigration(c.env)
+  await next()
+})
 
 app.use('*', async (c, next) => {
   await next()
@@ -245,7 +267,7 @@ app.post('/admin/post', async (c) => {
   if (!title || !body) return c.redirect('/admin/post/new')
   const blocks = extractAiSummaryBlocks(body)
   const summaries = blocks.length ? await generateSummaries(c.env, blocks) : []
-  await createPost(c, title, slug, body, JSON.stringify(summaries), license)
+  await createPost(c, title, slug, body, JSON.stringify(summaries), license, normalizeTags((form.get('tags') as string ?? '')))
   return c.redirect('/admin')
 })
 
@@ -276,7 +298,7 @@ app.post('/admin/post/:id', async (c) => {
       summaries = await generateSummaries(c.env, newBlocks)
     }
   }
-  await updatePost(c, existing, title, slug, body, newBlocks.length ? JSON.stringify(summaries) : null, license)
+  await updatePost(c, existing, title, slug, body, newBlocks.length ? JSON.stringify(summaries) : null, license, normalizeTags((form.get('tags') as string ?? '')))
   await deleteRemovedImages(c.env, existing.body, body)
   return c.redirect('/admin')
 })

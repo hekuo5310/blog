@@ -162,6 +162,9 @@ a:hover{opacity:.7}
 .post-title:hover{color:var(--accent)}
 .post-excerpt{font-size:.88rem;color:var(--muted);line-height:1.5}
 
+/* search */
+.search-page{padding:2.5rem 0 1rem}.search-page h1{font-size:1.7rem;margin-bottom:1rem}.search-form{display:flex;gap:.6rem;margin-bottom:1.2rem}.search-input{min-width:0;flex:1;padding:.65rem .85rem;border:1px solid var(--input-border);border-radius:6px;background:var(--surface);color:var(--text);font:inherit}.search-input:focus{outline:2px solid var(--accent);outline-offset:1px}.search-result-summary{font-size:.86rem;color:var(--muted);margin-bottom:.35rem}.search-result-title{font-size:1.05rem;font-weight:600;color:var(--text)}.search-result-title:hover{color:var(--accent);opacity:1}
+
 /* article */
 .article-wrap{max-width:1200px}
 .article-layout{display:grid;grid-template-columns:minmax(0,820px) 220px;gap:3rem;justify-content:center;align-items:start}
@@ -170,6 +173,9 @@ a:hover{opacity:.7}
 .article h1{font-size:2rem;font-weight:700;margin-bottom:.5rem}
 .article-meta{color:var(--faint);font-size:.85rem;margin-bottom:2rem}
 .article-meta a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.article-tools{display:flex;align-items:center;gap:.65rem;margin:-1.15rem 0 1.75rem;font-size:.82rem;color:var(--muted)}
+.article-copy-link{border:1px solid var(--input-border);border-radius:5px;padding:.22rem .5rem;background:var(--surface);color:var(--text-soft);font:inherit;cursor:pointer}.article-copy-link:hover{background:var(--bg-soft)}
+.reading-progress{position:fixed;top:0;left:0;width:0;height:3px;background:var(--accent);z-index:200;transition:width .08s linear}
 .custom-license{margin-top:2rem;padding:1rem 1.1rem;border-left:3px solid var(--input-border);background:var(--bg-soft)}
 .custom-license h2{font-size:1rem;margin-bottom:.65rem}
 .custom-license-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.86rem;line-height:1.65;color:var(--muted)}
@@ -247,7 +253,7 @@ a:hover{opacity:.7}
 .stats-subsection+.stats-subsection{margin-top:1.5rem}
 .stats-subsection h2{font-size:1rem;margin-bottom:.55rem}
 .stats-empty{font-size:.86rem;color:var(--faint);padding:.5rem 0}
-@media(max-width:600px){.nav{padding:.75rem 1rem}.nav-links{gap:.75rem;max-width:calc(100vw - 6.5rem);overflow-x:auto;scrollbar-width:none}.nav-links::-webkit-scrollbar{display:none}.stats-head{align-items:start;flex-direction:column}.stats-toolbar{align-items:start;flex-direction:column}.stats-range{width:100%;overflow-x:auto}.stats-range-button{flex:1}.stats-kpis{grid-template-columns:1fr}.stats-grid{grid-template-columns:1fr;gap:1.5rem}}
+@media(max-width:600px){.nav{padding:.7rem 1rem;gap:.75rem}.nav-logo{font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nav-links{gap:.45rem;max-width:calc(100vw - 5.8rem);overflow-x:auto;scrollbar-width:none}.nav-links::-webkit-scrollbar{display:none}.nav-report{padding:.24rem .42rem;font-size:.78rem}.subscribe-toggle{padding:.22rem .5rem;font-size:.78rem}.wrap{padding:0 1rem}.hero{padding:2.5rem 0 1.25rem}.hero h1{font-size:2rem}.post-item{grid-template-columns:1fr;gap:.35rem;padding:1rem 0}.post-date{padding:0}.article{padding:1.25rem 0}.article h1{font-size:1.55rem;line-height:1.35}.article-meta{margin-bottom:1.4rem}.article-tools{margin:-.7rem 0 1.25rem}.article-body{font-size:.96rem;line-height:1.75}.article-body pre{margin-left:-.25rem;margin-right:-.25rem;padding:.75rem}.editor-wrap{grid-template-columns:1fr;height:auto}.editor-pane textarea{min-height:360px;border-right:0}.preview-pane{min-height:260px;border-top:1px solid var(--input-border)}.stats-head{align-items:start;flex-direction:column}.stats-toolbar{align-items:start;flex-direction:column}.stats-range{width:100%;overflow-x:auto}.stats-range-button{flex:1}.stats-kpis{grid-template-columns:1fr}.stats-grid{grid-template-columns:1fr;gap:1.5rem}}
 
 /* comments */
 .comments{margin-top:3rem;border-top:1px solid var(--border);padding-top:2rem}
@@ -293,6 +299,7 @@ th{font-weight:600;color:var(--muted);font-size:.8rem;text-transform:uppercase;l
 .update-toast-title{min-width:0;color:#fff;font-size:1rem;font-weight:700;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .update-toast-action{border:none;border-radius:5px;background:#fff;color:#000;padding:.35rem .65rem;font-size:.86rem;line-height:1;cursor:pointer;font-family:inherit;white-space:nowrap}
 .update-toast-action:hover{opacity:.86}
+.back-to-top{position:fixed;right:1rem;bottom:1rem;z-index:150;border:1px solid var(--input-border);border-radius:999px;background:var(--surface);color:var(--text);width:2.5rem;height:2.5rem;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.12);opacity:0;pointer-events:none;transition:opacity .2s ease}.back-to-top.show{opacity:1;pointer-events:auto}
 [style*="color:#888"],[style*="color: #888"]{color:var(--subtle)!important}
 [style*="color:#aaa"],[style*="color: #aaa"]{color:var(--faint)!important}
 [style*="color:#555"],[style*="color: #555"]{color:var(--muted)!important}
@@ -306,7 +313,7 @@ export function layout(title: string, body: string, adminNav = false, _loggedInU
   const updateJson = JSON.stringify(updates)
   const rightNav = adminNav
     ? `<div class="nav-links"><a href="/admin">管理</a><a href="/admin/post/new">新建</a><a href="/admin/settings">设置</a>${themeToggle}<form method="post" action="/admin/logout" style="display:inline"><button class="nav-icon">退出</button></form></div>`
-    : `<div class="nav-links">${extraLinks}<a class="nav-report" href="/stats">访问报表</a>${subscribeToggle}${themeToggle}</div>`
+    : `<div class="nav-links">${extraLinks}<a class="nav-report" href="/search">搜索</a><a class="nav-report" href="/archive">归档</a><a class="nav-report" href="/stats">访问报表</a>${subscribeToggle}${themeToggle}</div>`
   return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(cfg.desc)}"><link rel="alternate" type="application/rss+xml" title="${esc(cfg.title)} RSS" href="/rss.xml"><title>${esc(title)} — ${esc(cfg.title)}</title><script>
 (function(){
   var saved=localStorage.getItem('theme');
@@ -332,6 +339,7 @@ ${body}
 <script>(function(){var y=new Date(Date.now()+28800000).getUTCFullYear();document.write('© 2026'+(y>2026?'~'+y:'')+' hekuo')})()</script>
 <div style="margin-top:.5rem;display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap"><a href="/terms">用户协议</a><a href="/privacy">隐私协议</a>|<a href="https://icp.gov.moe/?keyword=20262200" target="_blank">萌ICP备20262200号</a></div>
 </footer>
+<button class="back-to-top" id="back-to-top" type="button" aria-label="返回顶部" title="返回顶部">↑</button>
 <script id="update-data" type="application/json">${updateJson.replace(/</g, '\\u003c')}</script>
 <script>
 (function(){
@@ -352,6 +360,17 @@ ${body}
     sync();
   });
   sync();
+})();
+</script>
+<script>
+(function(){
+  var top=document.getElementById('back-to-top');
+  if(top){var sync=function(){top.classList.toggle('show',window.scrollY>480)};window.addEventListener('scroll',sync,{passive:true});top.addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'})});sync();}
+  document.addEventListener('keydown',function(event){
+    var target=event.target;var typing=target&&(/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)||target.isContentEditable);
+    if(!typing&&event.key==='/'&&!event.ctrlKey&&!event.metaKey){event.preventDefault();window.location.href='/search';}
+    if(event.key==='Escape'&&target&&target.tagName==='INPUT'&&target.name==='q'){target.value='';target.focus();}
+  });
 })();
 </script>
 <script>
@@ -863,6 +882,26 @@ ${heatmap(activities)}
   return layout(cfg.title, body, false, undefined, cfg, updateItems(posts))
 }
 
+export function searchPage(query: string, posts: Post[], cfg: SiteConfig = DEFAULT_CONFIG): string {
+  const hasQuery = Boolean(query)
+  const items = posts.map(post => `<article class="post-item"><div class="post-date">${formatUtc8Date(post.created_at)}</div><div><a class="search-result-title" href="/post/${encodeURIComponent(post.slug)}">${esc(post.title)}</a><div class="post-excerpt">${excerpt(post.body, 180)}</div></div></article>`).join('')
+  const summary = !hasQuery
+    ? '输入关键词，搜索标题和正文。'
+    : posts.length ? `找到 ${posts.length} 篇与“${esc(query)}”相关的文章。` : `没有找到与“${esc(query)}”相关的文章。`
+  const body = `<main class="wrap search-page"><h1>搜索文章</h1><form class="search-form" action="/search" method="get" role="search"><input class="search-input" name="q" value="${esc(query)}" maxlength="100" placeholder="输入关键词" autofocus><button class="btn" type="submit">搜索</button></form><p class="search-result-summary">${summary}</p>${items ? `<div class="post-list">${items}</div>` : ''}</main>`
+  return layout(hasQuery ? `搜索：${query}` : '搜索', body, false, undefined, cfg)
+}
+
+export function archivePage(posts: Post[], cfg: SiteConfig = DEFAULT_CONFIG): string {
+  const grouped = new Map<string, Post[]>()
+  posts.forEach(post => {
+    const year = formatUtc8Date(post.created_at).slice(0, 4)
+    grouped.set(year, [...(grouped.get(year) || []), post])
+  })
+  const sections = [...grouped].map(([year, items]) => `<section><h2 style="font-size:1rem;margin-top:1.5rem">${year}</h2><div class="post-list">${items.map(post => `<article class="post-item"><div class="post-date">${formatUtc8Date(post.created_at)}</div><div><a class="search-result-title" href="/post/${encodeURIComponent(post.slug)}">${esc(post.title)}</a></div></article>`).join('')}</div></section>`).join('')
+  return layout('文章归档', `<main class="wrap search-page"><h1>文章归档</h1>${sections || '<p class="search-result-summary">暂无文章。</p>'}</main>`, false, undefined, cfg)
+}
+
 function statList(items: StatItem[], linkPaths = false, labels?: Record<string, string>): string {
   if (!items.length) return '<p class="stats-empty">暂无数据</p>'
   return `<ol class="stats-list">${items.map(item => {
@@ -998,6 +1037,7 @@ export function postDetail(post: Post, cfg: SiteConfig = DEFAULT_CONFIG, giscus?
   const body = `<div class="wrap article-wrap"><div class="article-layout"><div class="article">
 <h1>${esc(post.title)}</h1>
 <div class="article-meta">${formatUtc8Date(post.created_at)} · 协议：${licenseHtml}</div>
+<div class="article-tools"><span id="reading-time"></span><button class="article-copy-link" id="copy-link" type="button">复制链接</button></div>
 <div class="article-body" id="post-body"></div>
 <script src="https://cdn.jsdelivr.net/npm/marked@18.0.6/lib/marked.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
@@ -1019,6 +1059,19 @@ while((m=re.exec(raw))!==null){
 }
 out+=window.renderMarkdown(raw.slice(last));
 document.getElementById('post-body').innerHTML=out;
+})();
+</script>
+<div class="reading-progress" id="reading-progress" aria-hidden="true"></div>
+<script>
+(function(){
+  var article=document.querySelector('.article');
+  var content=document.getElementById('post-body');
+  var time=document.getElementById('reading-time');
+  var copy=document.getElementById('copy-link');
+  var progress=document.getElementById('reading-progress');
+  if(content&&time){var chars=(content.textContent||'').replace(/\s/g,'').length;time.textContent='约 '+Math.max(1,Math.ceil(chars/400))+' 分钟阅读';}
+  if(copy){copy.addEventListener('click',function(){var done=function(){copy.textContent='已复制';setTimeout(function(){copy.textContent='复制链接';},1600)};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(location.href).then(done).catch(function(){});}else{var input=document.createElement('input');input.value=location.href;document.body.appendChild(input);input.select();document.execCommand('copy');input.remove();done();}});}
+  if(article&&progress){var sync=function(){var start=article.getBoundingClientRect().top+window.scrollY-110;var end=start+article.offsetHeight-window.innerHeight;var value=end<=start?100:Math.max(0,Math.min(100,(window.scrollY-start)/(end-start)*100));progress.style.width=value+'%';};window.addEventListener('scroll',sync,{passive:true});window.addEventListener('resize',sync);sync();}
 })();
 </script>
 ${customLicenseBlock}

@@ -4,7 +4,7 @@ import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDas
 import type { GiscusConfig, SiteConfig, Post } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish } from './pages'
 import { createSession, validateSession, deleteSession, sessionCookie, clearCookie, isLoginRateLimited, recordLoginFailure, clearLoginFailures } from './auth'
-import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts, normalizeTags } from './posts'
+import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts, normalizeTags, listTags } from './posts'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries } from './ai-summary'
 import { normalizeArticleLicenseInput } from './licenses'
@@ -250,6 +250,7 @@ app.post('/admin/settings', async (c) => {
 })
 
 app.post('/admin/images', uploadImage)
+app.get('/admin/tags.json', async (c) => c.json(await listTags(c)))
 
 // admin posts
 app.get('/admin', async (c) => {

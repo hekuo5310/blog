@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, statsPage, DEFAULT_CONFIG } from './html'
+import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, statsPage, searchPage, archivePage, DEFAULT_CONFIG } from './html'
 import type { GiscusConfig, SiteConfig, Post } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish } from './pages'
 import { createSession, validateSession, deleteSession, sessionCookie, clearCookie, isLoginRateLimited, recordLoginFailure, clearLoginFailures } from './auth'
-import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish } from './posts'
+import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts } from './posts'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries } from './ai-summary'
 import { normalizeArticleLicenseInput } from './licenses'
@@ -125,6 +125,23 @@ app.get('/updates.json', async (c) => {
 app.get('/rss.xml', rssFeed)
 app.get('/feed.xml', rssFeed)
 
+app.get('/robots.txt', (c) => {
+  const origin = new URL(c.req.url).origin
+  return c.text(`User-agent: *\nAllow: /\nDisallow: /admin/\nSitemap: ${origin}/sitemap.xml\n`, 200, { 'Cache-Control': 'public, max-age=86400' })
+})
+
+app.get('/sitemap.xml', async (c) => {
+  const [posts, pages] = await Promise.all([listPublicPosts(c), listPublicPages(c)])
+  const origin = new URL(c.req.url).origin
+  const urls = [
+    { path: '/', lastmod: undefined },
+    ...posts.map(post => ({ path: `/post/${encodeURIComponent(post.slug)}`, lastmod: databaseUtcToIso(post.created_at).slice(0, 10) })),
+    ...pages.map(page => ({ path: `/p/${encodeURIComponent(page.slug)}`, lastmod: databaseUtcToIso(page.created_at).slice(0, 10) }))
+  ]
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map(item => `<url><loc>${xmlEscape(`${origin}${item.path}`)}</loc>${item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ''}</url>`).join('')}</urlset>`
+  return new Response(xml, { headers: { 'Content-Type': 'application/xml; charset=UTF-8', 'Cache-Control': 'public, max-age=3600' } })
+})
+
 app.get('/healthz', async (c) => {
   await c.env.DB.prepare('SELECT 1').first()
   c.header('Cache-Control', 'no-store')
@@ -140,6 +157,16 @@ app.get('/stats', async (c) => {
 app.get('/stats.json', async (c) => {
   c.header('Cache-Control', 'no-store')
   return c.json(await getPublicStats(c, c.req.query('range')))
+})
+
+app.get('/search', async (c) => {
+  const query = (c.req.query('q') || '').trim()
+  const [posts, cfg] = await Promise.all([searchPublicPosts(c, query), getConfig(c.env)])
+  return c.html(searchPage(query, posts, cfg))
+})
+app.get('/archive', async (c) => {
+  const [posts, cfg] = await Promise.all([listPublicPosts(c), getConfig(c.env)])
+  return c.html(archivePage(posts, cfg))
 })
 
 app.get('/post/:slug', async (c) => {

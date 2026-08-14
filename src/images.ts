@@ -37,7 +37,7 @@ export async function uploadImage(c: Context<{ Bindings: Env }>) {
 
 export async function serveImage(c: Context<{ Bindings: Env }>) {
   const key = c.req.path.slice(IMAGE_PATH_PREFIX.length)
-  if (!key || key.includes('..')) return c.notFound()
+  if (!key || key.includes('..') || key.startsWith('/')) return c.notFound()
   const object = await c.env.IMAGES.get(key)
   if (!object) return c.notFound()
 
@@ -46,21 +46,35 @@ export async function serveImage(c: Context<{ Bindings: Env }>) {
   headers.set('etag', object.httpEtag)
   headers.set('cache-control', 'public, max-age=31536000, immutable')
   headers.set('x-content-type-options', 'nosniff')
+  headers.set('cross-origin-resource-policy', 'same-site')
   return new Response(object.body, { headers })
 }
 
 export function extractImageKeys(markdown: string): string[] {
   const keys = new Set<string>()
   const re = /\/images\/([A-Za-z0-9][A-Za-z0-9/_\-.]*[A-Za-z0-9])/g
-  for (const match of markdown.matchAll(re)) {
-    keys.add(match[1])
-  }
+  for (const match of markdown.matchAll(re)) keys.add(match[1])
   return [...keys]
+}
+
+async function isImageReferenced(env: Env, key: string): Promise<boolean> {
+  const marker = `%/images/${key}%`
+  const row = await env.DB.prepare(`
+    SELECT 1 AS found FROM posts WHERE body LIKE ? LIMIT 1
+  `).bind(marker).first<{ found: number }>()
+  if (row) return true
+  const page = await env.DB.prepare(`
+    SELECT 1 AS found FROM pages WHERE body LIKE ? LIMIT 1
+  `).bind(marker).first<{ found: number }>()
+  return Boolean(page)
 }
 
 export async function deleteImageKeys(env: Env, keys: string[]) {
   const unique = [...new Set(keys)].filter(Boolean)
-  await Promise.all(unique.map(key => env.IMAGES.delete(key)))
+  await Promise.all(unique.map(async key => {
+    if (await isImageReferenced(env, key)) return
+    await env.IMAGES.delete(key)
+  }))
 }
 
 export async function deleteRemovedImages(env: Env, oldBody: string, nextBody: string) {

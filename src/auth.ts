@@ -3,39 +3,73 @@ import type { Env } from './index'
 
 const LOGIN_ATTEMPT_LIMIT = 5
 const LOGIN_ATTEMPT_TTL = 15 * 60
+const SESSION_TTL = 86400
+const SESSION_COOKIE = '__Host-session'
+const DEV_SESSION_COOKIE = 'session'
 
 export function getCookie(req: Request, name: string): string | undefined {
   const header = req.headers.get('Cookie') ?? ''
   for (const part of header.split(';')) {
-    const [k, v] = part.trim().split('=')
-    if (k === name) return v
+    const trimmed = part.trim()
+    const eq = trimmed.indexOf('=')
+    if (eq === -1) continue
+    if (trimmed.slice(0, eq) === name) return decodeURIComponent(trimmed.slice(eq + 1))
+  }
+}
+
+function secureRequest(c: Context<{ Bindings: Env }>): boolean {
+  return new URL(c.req.url).protocol === 'https:'
+}
+
+function sessionCookieName(secure: boolean): string {
+  return secure ? SESSION_COOKIE : DEV_SESSION_COOKIE
+}
+
+function sameOrigin(c: Context<{ Bindings: Env }>): boolean {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) return true
+  const target = new URL(c.req.url).origin
+  const origin = c.req.header('Origin')
+  if (origin) return origin === target
+  const referer = c.req.header('Referer')
+  if (!referer) return false
+  try {
+    return new URL(referer).origin === target
+  } catch {
+    return false
   }
 }
 
 export async function createSession(env: Env): Promise<string> {
-  const token = crypto.randomUUID()
-  await env.SESSIONS.put(token, '1', { expirationTtl: 86400 })
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  const token = [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('')
+  await env.SESSIONS.put(token, '1', { expirationTtl: SESSION_TTL })
   return token
 }
 
 export async function validateSession(c: Context<{ Bindings: Env }>): Promise<boolean> {
-  const token = getCookie(c.req.raw, 'session')
+  if (!sameOrigin(c)) return false
+  const secure = secureRequest(c)
+  const token = getCookie(c.req.raw, sessionCookieName(secure))
   if (!token) return false
   const val = await c.env.SESSIONS.get(token)
   return val !== null
 }
 
 export async function deleteSession(c: Context<{ Bindings: Env }>): Promise<void> {
-  const token = getCookie(c.req.raw, 'session')
+  const secure = secureRequest(c)
+  const token = getCookie(c.req.raw, sessionCookieName(secure))
   if (token) await c.env.SESSIONS.delete(token)
 }
 
 export function sessionCookie(token: string, secure = true): string {
-  return `session=${token}; HttpOnly${secure ? '; Secure' : ''}; SameSite=Strict; Path=/; Max-Age=86400`
+  const name = sessionCookieName(secure)
+  return `${name}=${encodeURIComponent(token)}; HttpOnly${secure ? '; Secure' : ''}; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL}`
 }
 
 export function clearCookie(secure = true): string {
-  return `session=; HttpOnly${secure ? '; Secure' : ''}; SameSite=Strict; Path=/; Max-Age=0`
+  const name = sessionCookieName(secure)
+  return `${name}=; HttpOnly${secure ? '; Secure' : ''}; SameSite=Strict; Path=/; Max-Age=0`
 }
 
 async function loginAttemptKey(c: Context<{ Bindings: Env }>): Promise<string> {

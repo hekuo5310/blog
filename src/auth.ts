@@ -80,6 +80,7 @@ async function loginAttemptKey(c: Context<{ Bindings: Env }>): Promise<string> {
 }
 
 export async function isLoginRateLimited(c: Context<{ Bindings: Env }>): Promise<boolean> {
+  if (!sameOrigin(c)) return true
   const attempts = Number(await c.env.SESSIONS.get(await loginAttemptKey(c)) || 0)
   return attempts >= LOGIN_ATTEMPT_LIMIT
 }

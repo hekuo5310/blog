@@ -2,8 +2,8 @@
   "name": "blog",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev --config wrangler.toml",
-    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --config wrangler.jsonc",
+    "deploy": "wrangler deploy --config wrangler.jsonc",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && wrangler deploy --dry-run --config wrangler.jsonc"
   },

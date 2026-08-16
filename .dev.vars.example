@@ -1,0 +1,19 @@
+# 一键部署（Deploy to Cloudflare 按钮）时，配置页会显示下面的变量。
+# 必填的只有 ADMIN_USER / ADMIN_PASS；其余为可选功能，
+# 不需要的话保留当前内容（empty = 视为没有内容，功能不启用）即可，无需修改任何东西。
+# 需要启用时：部署后 wrangler secret put 设置对应变量（见 README「一键部署」小节）。
+
+# 必填：博客后台管理员账号（登录 /admin 用）
+ADMIN_USER=admin
+ADMIN_PASS=change-me-to-a-strong-password
+
+# 可选：AI 文章总结（OpenAI 协议兼容，如 DeepSeek）。不需要的话保留当前内容（empty = 不启用）
+OPENAI_API_KEY=empty
+
+# 可选：Giscus 评论（GitHub Discussions）。不需要的话保留当前内容（empty = 不启用）
+GISCUS_REPO=empty
+GISCUS_REPO_ID=empty
+GISCUS_CATEGORY=empty
+GISCUS_CATEGORY_ID=empty
+GISCUS_MAPPING=empty
+GISCUS_LANG=empty

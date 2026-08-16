@@ -1,4 +1,5 @@
 import type { Env } from './index'
+import { isConfigured } from './config'
 
 // Matches every [ai-summary]...[/ai-summary] block, capturing inner content.
 const BLOCK_RE = /\[ai-summary\]([\s\S]*?)\[\/ai-summary\]/g
@@ -38,7 +39,7 @@ const SYSTEM_PROMPT =
  */
 export async function generateSummaries(env: Env, blocks: string[]): Promise<string[]> {
   const key = env.OPENAI_API_KEY
-  if (!key || !blocks.length) return blocks.map(() => '')
+  if (!isConfigured(key) || !blocks.length) return blocks.map(() => '')
   const baseUrl = (env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')
   const model = env.OPENAI_MODEL || 'gpt-4o-mini'
   return Promise.all(blocks.map(async (block) => {
@@ -66,9 +67,9 @@ export async function generateSummaries(env: Env, blocks: string[]): Promise<str
   }))
 }
 export async function polishParagraphs(env: Env, paragraphs: string[]): Promise<string[]> {
-  if (!env.OPENAI_API_KEY) return paragraphs.map(() => '')
+  if (!isConfigured(env.OPENAI_API_KEY)) return paragraphs.map(() => '')
   const base = (env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')
   const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: env.OPENAI_MODEL || 'gpt-4o-mini', messages: [{ role: 'system', content: '润色中文文章。保持原意、Markdown 和事实，不要解释。按输入 JSON 数组顺序，只返回等长 JSON 字符串数组。' }, { role: 'user', content: JSON.stringify(paragraphs) }], temperature: .35 }) })
   if (!res.ok) return paragraphs.map(() => '')
-  try { const text = (await res.json())?.choices?.[0]?.message?.content; const value = JSON.parse(text); return Array.isArray(value) ? paragraphs.map((_, i) => typeof value[i] === 'string' ? value[i].trim() : '') : paragraphs.map(() => '') } catch { return paragraphs.map(() => '') }
+  try { const data: any = await res.json(); const text = data?.choices?.[0]?.message?.content; const value = JSON.parse(text); return Array.isArray(value) ? paragraphs.map((_, i) => typeof value[i] === 'string' ? value[i].trim() : '') : paragraphs.map(() => '') } catch { return paragraphs.map(() => '') }
 }

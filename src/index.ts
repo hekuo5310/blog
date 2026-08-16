@@ -63,6 +63,7 @@ app.use('*', async (c, next) => {
   c.header('X-Frame-Options', 'SAMEORIGIN')
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  c.header('Accept-CH', 'Sec-CH-Width')
 })
 
 app.use('*', async (c, next) => {

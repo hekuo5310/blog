@@ -32,10 +32,29 @@ export function normalizeStatsRange(value?: string): StatsRange {
   return value && Object.prototype.hasOwnProperty.call(RANGE_CONFIG, value) ? value as StatsRange : '24h'
 }
 
+function deviceFromWidth(width: number): 'desktop' | 'mobile' | 'tablet' {
+  if (width < 768) return 'mobile'
+  if (width < 1024) return 'tablet'
+  return 'desktop'
+}
+
 function deviceFromUserAgent(userAgent: string): 'desktop' | 'mobile' | 'tablet' {
   if (/ipad|tablet|kindle|silk/i.test(userAgent)) return 'tablet'
   if (/mobile|iphone|ipod|android/i.test(userAgent)) return 'mobile'
   return 'desktop'
+}
+
+/**
+ * 设备类型优先按「物理设备宽度」判断，而不是 UA：
+ * 手机浏览器开「桌面网站」后 UA 和布局视口都会变成桌面尺寸，
+ * 但 Sec-CH-Width（Chromium Client Hint）和 window.screen.width（JS 种入 cookie）不变。
+ */
+function deviceFromRequest(c: Context<{ Bindings: Env }>): 'desktop' | 'mobile' | 'tablet' {
+  const chWidth = c.req.header('Sec-CH-Width')
+  if (chWidth && /^\d+$/.test(chWidth)) return deviceFromWidth(Number(chWidth))
+  const cookieMatch = (c.req.header('Cookie') || '').match(/(?:^|;\s*)pv_w=(\d+)/)
+  if (cookieMatch) return deviceFromWidth(Number(cookieMatch[1]))
+  return deviceFromUserAgent(c.req.header('User-Agent') || '')
 }
 
 function externalReferrerHost(requestUrl: string, referrer?: string): string | null {
@@ -81,9 +100,8 @@ export function shouldRecordPageView(c: Context<{ Bindings: Env }>): boolean {
 
 export async function recordPageView(c: Context<{ Bindings: Env }>): Promise<void> {
   const path = (c.req.path.length > 1 ? c.req.path.replace(/\/+$/, '') : '/').slice(0, 300)
-  const userAgent = c.req.header('User-Agent') || ''
   await c.env.DB.prepare('INSERT INTO page_views (path,referrer_host,device,country_code) VALUES (?,?,?,?)')
-    .bind(path, externalReferrerHost(c.req.url, c.req.header('Referer')), deviceFromUserAgent(userAgent), countryCodeFromRequest(c)).run()
+    .bind(path, externalReferrerHost(c.req.url, c.req.header('Referer')), deviceFromRequest(c), countryCodeFromRequest(c)).run()
 }
 
 function numberValue(value: unknown): number {

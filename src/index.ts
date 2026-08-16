@@ -10,6 +10,7 @@ import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries,
 import { normalizeArticleLicenseInput } from './licenses'
 import { databaseUtcToIso, parseDatabaseUtc } from './time'
 import { getPublicStats, recordPageView, shouldRecordPageView } from './analytics'
+import { isConfigured } from './config'
 
 export type Env = {
   DB: D1Database
@@ -62,6 +63,7 @@ app.use('*', async (c, next) => {
   c.header('X-Frame-Options', 'SAMEORIGIN')
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  c.header('Accept-CH', 'Sec-CH-Width')
 })
 
 app.use('*', async (c, next) => {
@@ -78,18 +80,18 @@ async function getConfig(env: Env): Promise<SiteConfig> {
 }
 
 function getGiscusConfig(env: Env): GiscusConfig | null {
-  if (!env.GISCUS_REPO_ID || !env.GISCUS_CATEGORY || !env.GISCUS_CATEGORY_ID) return null
+  if (!isConfigured(env.GISCUS_REPO_ID) || !isConfigured(env.GISCUS_CATEGORY) || !isConfigured(env.GISCUS_CATEGORY_ID)) return null
   return {
-    repo: env.GISCUS_REPO || 'hekuo5310/blog',
-    repoId: env.GISCUS_REPO_ID,
-    category: env.GISCUS_CATEGORY,
-    categoryId: env.GISCUS_CATEGORY_ID,
-    mapping: env.GISCUS_MAPPING || 'pathname',
+    repo: isConfigured(env.GISCUS_REPO) ? env.GISCUS_REPO! : 'hekuo5310/blog',
+    repoId: env.GISCUS_REPO_ID!,
+    category: env.GISCUS_CATEGORY!,
+    categoryId: env.GISCUS_CATEGORY_ID!,
+    mapping: isConfigured(env.GISCUS_MAPPING) ? env.GISCUS_MAPPING! : 'pathname',
     strict: '0',
     reactionsEnabled: '1',
     emitMetadata: '0',
     inputPosition: 'bottom',
-    lang: env.GISCUS_LANG || 'zh-CN'
+    lang: isConfigured(env.GISCUS_LANG) ? env.GISCUS_LANG! : 'zh-CN'
   }
 }
 

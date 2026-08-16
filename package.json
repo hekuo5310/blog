@@ -2,8 +2,9 @@
   "name": "blog",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev --config wrangler.toml",
-    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --config wrangler.jsonc",
+    "db:migrations:apply": "wrangler d1 migrations apply DB --remote",
+    "deploy": "npm run db:migrations:apply && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && wrangler deploy --dry-run --config wrangler.jsonc"
   },
@@ -15,5 +16,36 @@
     "@cloudflare/workers-types": "^5.20260716.1",
     "typescript": "^5.5.0",
     "wrangler": "^4.111.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "ADMIN_USER": {
+        "description": "博客后台管理员用户名"
+      },
+      "ADMIN_PASS": {
+        "description": "博客后台管理员密码"
+      },
+      "OPENAI_API_KEY": {
+        "description": "可选。AI 文章总结使用的 OpenAI 兼容 API key（DeepSeek / Moonshot / 本地服务等），留空则文章不生成 AI 总结"
+      },
+      "GISCUS_REPO": {
+        "description": "可选。Giscus 评论的 GitHub 仓库，格式 `owner/repo`"
+      },
+      "GISCUS_REPO_ID": {
+        "description": "可选。Giscus 评论仓库 ID（在 https://giscus.app 获取）"
+      },
+      "GISCUS_CATEGORY": {
+        "description": "可选。Giscus 评论分类名称"
+      },
+      "GISCUS_CATEGORY_ID": {
+        "description": "可选。Giscus 评论分类 ID"
+      },
+      "GISCUS_MAPPING": {
+        "description": "可选。Giscus 映射方式，默认 pathname"
+      },
+      "GISCUS_LANG": {
+        "description": "可选。Giscus 语言，默认 zh-CN"
+      }
+    }
   }
 }

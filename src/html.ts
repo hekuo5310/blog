@@ -321,6 +321,7 @@ export function layout(title: string, body: string, adminNav = false, _loggedInU
   var systemDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
   document.documentElement.dataset.theme=saved||(systemDark?'dark':'light');
 })();
+(function(){try{if(!/(?:^|;\s*)pv_w=\d+/.test(document.cookie)){document.cookie='pv_w='+window.screen.width+';path=/;max-age=86400'}}catch(e){}})();
 </script><link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet"><style>${BASE_CSS}</style></head><body>
 <nav class="nav"><a href="/" class="nav-logo">${esc(cfg.title)}</a>${rightNav}</nav>
 ${body}

@@ -2,9 +2,9 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, statsPage, searchPage, archivePage, DEFAULT_CONFIG } from './html'
 import type { GiscusConfig, SiteConfig, Post } from './html'
-import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish } from './pages'
+import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish, autosavePage } from './pages'
 import { createSession, verifyCredentials, validateSession, deleteSession, sessionCookie, clearCookie, isLoginRateLimited, recordLoginFailure, clearLoginFailures } from './auth'
-import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts, normalizeTags, listTags } from './posts'
+import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts, normalizeTags, listTags, autosavePost } from './posts'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries, polishParagraphs } from './ai-summary'
 import { normalizeArticleLicenseInput } from './licenses'
@@ -255,6 +255,24 @@ app.post('/admin/settings', async (c) => {
 app.post('/admin/images', uploadImage)
 app.post('/admin/polish', async (c) => { const body = await c.req.json<{ paragraphs?: string[] }>(); const paragraphs = (body.paragraphs || []).filter(p => typeof p === 'string').slice(0, 50); return c.json({ paragraphs: await polishParagraphs(c.env, paragraphs) }) })
 app.get('/admin/tags.json', async (c) => c.json(await listTags(c)))
+
+async function autosaveBody(c: Context<{ Bindings: Env }>): Promise<{ id: number | null; title: string; body: string }> {
+  const payload = await c.req.json<{ id?: number | null; title?: unknown; body?: unknown }>().catch(() => ({}) as { id?: number | null; title?: unknown; body?: unknown })
+  const id = typeof payload.id === 'number' && Number.isFinite(payload.id) ? payload.id : null
+  const title = typeof payload.title === 'string' ? payload.title : ''
+  const body = typeof payload.body === 'string' ? payload.body : ''
+  return { id, title, body }
+}
+
+app.post('/admin/post/autosave', async (c) => {
+  const { id, title, body } = await autosaveBody(c)
+  return c.json(await autosavePost(c, id, title.trim().slice(0, 200), body), { status: 200 })
+})
+
+app.post('/admin/page/autosave', async (c) => {
+  const { id, title, body } = await autosaveBody(c)
+  return c.json(await autosavePage(c, id, title.trim().slice(0, 200), body), { status: 200 })
+})
 
 // admin posts
 app.get('/admin', async (c) => {

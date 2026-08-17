@@ -3,7 +3,7 @@ import type { Env } from './index'
 import type { Post, PostActivity, PostActivityChanges } from './html'
 import { pinyin } from 'pinyin-pro'
 import type { ArticleLicenseInput } from './licenses'
-import { CUSTOM_ARTICLE_LICENSE, articleLicenseDisplayName, normalizeArticleLicense, normalizeArticleLicenseInput } from './licenses'
+import { CUSTOM_ARTICLE_LICENSE, DEFAULT_ARTICLE_LICENSE, articleLicenseDisplayName, normalizeArticleLicense, normalizeArticleLicenseInput } from './licenses'
 
 function toSlug(title: string): string {
   const py = pinyin(title, { toneType: 'none', type: 'array' }).join('')
@@ -188,4 +188,38 @@ export async function togglePublish(c: Context<{ Bindings: Env }>, id: number) {
     ])
   }
   return true
+}
+
+export type AutosaveResult =
+  | { status: 'saved'; id: number }
+  | { status: 'noop' }
+  | { status: 'missing' }
+  | { status: 'declined' }
+
+/**
+ * 把编辑器内容作为普通草稿写入 D1。
+ * - id 为空：创建一条 published=0 的草稿并返回新 id
+ * - id 已存在且是草稿：只更新标题与正文（slug 保持不变）
+ * - id 已存在且已发布：拒绝自动保存，避免悄悄改动线上内容
+ */
+export async function autosavePost(c: Context<{ Bindings: Env }>, id: number | null, title: string, body: string): Promise<AutosaveResult> {
+  const cleanTitle = title.trim().slice(0, 200)
+  const cleanBody = body.replace(/\r\n/g, '\n').trim().slice(0, 200000)
+  if (!cleanTitle && !cleanBody) return { status: 'noop' }
+
+  if (id !== null) {
+    const existing = await getPostById(c, id)
+    if (!existing) return { status: 'missing' }
+    if (existing.published) return { status: 'declined' }
+    await c.env.DB.prepare('UPDATE posts SET title=?, body=? WHERE id=?')
+      .bind(cleanTitle || existing.title, cleanBody, id).run()
+    return { status: 'saved', id }
+  }
+
+  const finalTitle = cleanTitle || '无标题草稿'
+  const slug = await uniqueSlug(c, toSlug(finalTitle))
+  await c.env.DB.prepare('INSERT INTO posts (title,slug,body,ai_summary,license,custom_license_name,custom_license_text,tags) VALUES (?,?,?,?,?,?,?,?)')
+    .bind(finalTitle, slug, cleanBody, null, DEFAULT_ARTICLE_LICENSE, '', '', '[]').run()
+  const row = await c.env.DB.prepare('SELECT last_insert_rowid() AS id').first<{ id: number }>()
+  return { status: 'saved', id: Number(row?.id ?? 0) }
 }

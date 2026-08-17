@@ -676,11 +676,9 @@ function updateItems(posts: Post[]): UpdateItem[] {
   return posts.map(p => ({ title: p.title, url: `/post/${encodeURIComponent(p.slug)}`, createdAt: databaseUtcToIso(p.created_at) }))
 }
 
-function editorWidget(title: string, body: string, hasSlug: boolean): string {
+function editorWidget(kind: 'post' | 'page', id: number | null, title: string, body: string): string {
   const safeBody = body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-  const titleField = hasSlug
-    ? `<input class="pf-input" name="title" placeholder="标题" required value="${esc(title)}" style="margin-bottom:.5rem">`
-    : `<input class="pf-input" name="title" placeholder="标题" required value="${esc(title)}" style="margin-bottom:.5rem">`
+  const titleField = `<input class="pf-input" id="pf-title" name="title" placeholder="标题" required value="${esc(title)}" style="margin-bottom:.5rem">`
   return `<style>
 .pf-input{padding:.65rem 1rem;border:1px solid var(--input-border);border-radius:6px;font-size:.95rem;outline:none;font-family:inherit;width:100%;background:var(--surface);color:var(--text)}
 .pf-input:focus{border-color:var(--text)}
@@ -697,11 +695,13 @@ function editorWidget(title: string, body: string, hasSlug: boolean): string {
 .preview-pane ul,.preview-pane ol{padding-left:1.5rem}
 .editor-bar{display:flex;align-items:center;justify-content:space-between;padding:.3rem .75rem;background:var(--bg-soft);border-bottom:1px solid var(--input-border);font-size:.78rem;color:var(--subtle)}
 .image-upload-status{color:var(--muted)}
+.draft-status{color:var(--subtle);font-size:.75rem}
 </style>
 ${titleField}
+<input type="hidden" name="id" id="pf-id" value="${id ?? ''}">
 <div class="editor-wrap">
   <div class="editor-pane">
-    <div class="editor-bar"><span>Markdown</span><span><button type="button" id="polish-all" class="nav-icon">AI 全文润色</button><span class="image-upload-status" id="image-upload-status"></span></span></div>
+    <div class="editor-bar"><span>Markdown</span><span style="display:flex;gap:.6rem;align-items:center"><button type="button" id="polish-all" class="nav-icon">AI 全文润色</button><span class="draft-status" id="draft-status"></span><span class="image-upload-status" id="image-upload-status"></span></span></div>
     <textarea id="md-src" name="body" placeholder="# 标题&#10;&#10;正文内容…">${safeBody}</textarea>
   </div>
   <div class="preview-pane" id="md-prev"></div>
@@ -712,7 +712,61 @@ ${MARKDOWN_SCRIPT}
 <script>
 (function(){
 const src=document.getElementById('md-src'),prev=document.getElementById('md-prev'),status=document.getElementById('image-upload-status');
+const titleEl=document.getElementById('pf-title'),draftStatus=document.getElementById('draft-status');
+const AUTOSAVE_URL=${JSON.stringify(`/admin/${kind}/autosave`)};
+const ACTION_BASE=${JSON.stringify(`/admin/${kind}`)};
+var form=document.getElementById('pf');
+var autoSaveEnabled=true;
 function render(){prev.innerHTML=window.renderMarkdown(src.value||'');}
+
+function padTime(n){return String(n).padStart(2,'0');}
+function setDraftStatus(text,good){if(!draftStatus)return;draftStatus.textContent=text;draftStatus.style.color=good?'#2e9e5b':'';}
+function currentId(){
+  var el=document.getElementById('pf-id');
+  var num=el&&el.value!==''?Number(el.value):null;
+  return (num===null||!Number.isFinite(num)||num===0)?null:num;
+}
+function readingFull(){
+  return src.value.trim()!==''||(titleEl&&titleEl.value.trim()!=='');
+}
+var saveTimer=null,saving=false;
+function doAutosave(){
+  if(!autoSaveEnabled||saving)return;
+  if(!readingFull())return;
+  saving=true;
+  setDraftStatus('自动保存中…',false);
+  fetch(AUTOSAVE_URL,{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({id:currentId(),title:titleEl?titleEl.value:'',body:src.value})})
+    .then(function(r){return r.json().catch(function(){return {}})})
+    .then(function(data){
+      saving=false;
+      if(data&&data.status==='saved'){
+        var idEl=document.getElementById('pf-id');
+        if(idEl&&!idEl.value&&data.id){idEl.value=data.id;if(form)form.action=ACTION_BASE+'/'+data.id;}
+        var d=new Date();
+        setDraftStatus('已自动保存 '+padTime(d.getHours())+':'+padTime(d.getMinutes())+':'+padTime(d.getSeconds()),true);
+      }else if(data&&data.status==='declined'){
+        autoSaveEnabled=false;
+        setDraftStatus('已发布内容，自动保存停用',false);
+      }else if(data&&data.status==='missing'){
+        autoSaveEnabled=false;
+        setDraftStatus('草稿不存在，请刷新页面',false);
+      }else{
+        setDraftStatus('自动保存失败',false);
+      }
+    })
+    .catch(function(){saving=false;setDraftStatus('自动保存失败',false)});
+}
+function scheduleAutosave(){
+  if(!autoSaveEnabled||!readingFull())return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(doAutosave,1000);
+}
+if(titleEl){
+  titleEl.addEventListener('input',scheduleAutosave);
+  titleEl.addEventListener('blur',function(){if(saveTimer)clearTimeout(saveTimer);doAutosave()});
+}
+src.addEventListener('input',scheduleAutosave);
+src.addEventListener('blur',function(){if(saveTimer)clearTimeout(saveTimer);doAutosave()});
 document.getElementById('polish-all').addEventListener('click',async function(){var parts=src.value.split(/\\n{2,}/);setStatus('AI 润色中...');var res=await fetch('/admin/polish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paragraphs:parts})});var data=await res.json();if(!res.ok||!data.paragraphs){setStatus('润色失败');return}var chosen=[];parts.forEach(function(before,i){var after=data.paragraphs[i];if(after&&after!==before&&confirm('替换这段？\\n\\n原文：\\n'+before.slice(0,180)+'\\n\\n润色后：\\n'+after.slice(0,180)))chosen.push(after);else chosen.push(before)});src.value=chosen.join('\\n\\n');render();setStatus('已更新')});
 function setStatus(text){if(status)status.textContent=text||'';}
 function insertText(text){
@@ -1194,7 +1248,7 @@ export function pageForm(page?: PageItem): string {
   const action = page ? `/admin/page/${page.id}` : '/admin/page'
   return layout(page ? '编辑页面' : '新建页面', `<div class="admin-wrap"><h1>${page ? '编辑页面' : '新建页面'}</h1>
 <form method="post" action="${action}" id="pf">
-  ${editorWidget(page?.title ?? '', page?.body ?? '', true)}
+  ${editorWidget('page', page ? page.id : null, page?.title ?? '', page?.body ?? '')}
   <input name="slug" class="pf-input" placeholder="路径 slug（如 about）" required value="${page ? esc(page.slug) : ''}" style="margin-top:.5rem">
   <div style="margin-top:.75rem"><button class="btn" type="submit">保存</button></div>
 </form></div>`, true)
@@ -1275,7 +1329,7 @@ export function postForm(post?: Post): string {
   const customSelected = selectedLicense === CUSTOM_ARTICLE_LICENSE
   return layout(post ? '编辑文章' : '新建文章', `<div class="admin-wrap"><h1>${post ? '编辑文章' : '新建文章'}</h1>
 <form method="post" action="${action}" id="pf">
-  ${editorWidget(post?.title ?? '', post?.body ?? '', false)}
+  ${editorWidget('post', post ? post.id : null, post?.title ?? '', post?.body ?? '')}
   <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">文章路径
     <input class="pf-input" name="slug" maxlength="80" value="${esc(post?.slug ?? '')}" style="margin-top:.35rem" placeholder="留空则根据标题自动生成拼音路径" autocomplete="off">
   </label>

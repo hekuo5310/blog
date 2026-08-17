@@ -42,6 +42,12 @@ wrangler secret put GISCUS_CATEGORY_ID
 - 健康检查：`/healthz`
 - 搜索与收录：`/search` 搜索标题和正文；自动生成 `/robots.txt` 与 `/sitemap.xml`，便于搜索引擎发现公开内容
 
+## 安全提示
+
+- **不要把真实密钥提交进仓库。** `ADMIN_PASS`、`OPENAI_API_KEY` 等一律通过 `wrangler secret put` 或本地 `.dev.vars`（已被 Git 忽略）配置，`wrangler.jsonc` 只保留公开配置。
+- 如果某个密钥曾经出现在 Git 历史中（哪怕已删除文件），请**立即到对应平台吊销并轮换**新密钥，并考虑用 `git filter-repo` 清理历史后强推（会改变所有提交 hash，需要协作者重新克隆）。
+- 管理后台已启用：管理员会话使用 `__Host-` 前缀 Cookie（生产环境）、同源校验、登录失败限流，以及 Salted 会话令牌。
+
 ## 部署
 
 项目首次收到请求时会自动检查并执行内置数据库迁移；已有站点升级到标签功能时无需手动执行 `0011_post_tags.sql`。
@@ -58,7 +64,7 @@ npm install
 wrangler d1 create blog-db
 ```
 
-输出中找 `database_id`，填入 `wrangler.toml`：
+输出中找 `database_id`，填入 `wrangler.jsonc`：
 
 ```toml
 [[d1_databases]]
@@ -71,7 +77,7 @@ database_id = "你的ID"
 wrangler kv:namespace create SESSIONS
 ```
 
-输出中找 `id`，填入 `wrangler.toml`：
+输出中找 `id`，填入 `wrangler.jsonc`：
 
 ```toml
 [[kv_namespaces]]
@@ -85,19 +91,12 @@ wrangler secret put ADMIN_USER   # 输入用户名
 wrangler secret put ADMIN_PASS   # 输入密码
 ```
 
-### 5. 初始化数据库
+### 5. 迁移数据库
+
+迁移会在部署时自动执行（见第 7 步），也可以单独先跑：
 
 ```bash
-wrangler d1 execute blog-db --file=migrations/0001_init.sql
-wrangler d1 execute blog-db --file=migrations/0002_users.sql
-wrangler d1 execute blog-db --file=migrations/0003_pages.sql
-wrangler d1 execute blog-db --file=migrations/0004_ai_summary.sql
-wrangler d1 execute blog-db --file=migrations/0005_post_activities.sql
-wrangler d1 execute blog-db --file=migrations/0006_remove_user_system.sql
-wrangler d1 execute blog-db --file=migrations/0007_post_license.sql
-wrangler d1 execute blog-db --file=migrations/0008_custom_license.sql
-wrangler d1 execute blog-db --file=migrations/0009_page_views.sql
-wrangler d1 execute blog-db --file=migrations/0010_page_view_country.sql
+wrangler d1 migrations apply DB --remote
 ```
 
 ### 6. 配置 AI 总结（可选）
@@ -138,16 +137,7 @@ npm run deploy
 ## 本地开发
 
 ```bash
-wrangler d1 execute blog-db --local --file=migrations/0001_init.sql
-wrangler d1 execute blog-db --local --file=migrations/0002_users.sql
-wrangler d1 execute blog-db --local --file=migrations/0003_pages.sql
-wrangler d1 execute blog-db --local --file=migrations/0004_ai_summary.sql
-wrangler d1 execute blog-db --local --file=migrations/0005_post_activities.sql
-wrangler d1 execute blog-db --local --file=migrations/0006_remove_user_system.sql
-wrangler d1 execute blog-db --local --file=migrations/0007_post_license.sql
-wrangler d1 execute blog-db --local --file=migrations/0008_custom_license.sql
-wrangler d1 execute blog-db --local --file=migrations/0009_page_views.sql
-wrangler d1 execute blog-db --local --file=migrations/0010_page_view_country.sql
+wrangler d1 migrations apply DB --local
 npm run dev
 ```
 
@@ -190,10 +180,12 @@ src/
   index.ts        路由入口
   auth.ts         session 管理
   posts.ts        文章 CRUD
+  pages.ts        页面 CRUD
   html.ts         HTML 模板
   ai-summary.ts   AI 总结：抽取标记块、调用 API
   analytics.ts    匿名页面访问统计与公开报表聚合
   time.ts         UTC 与 UTC+8 时间转换
+  config.ts       可选环境变量判断
 migrations/
   0001_init.sql         建表
   0004_ai_summary.sql   posts 增加 ai_summary 列
@@ -203,6 +195,8 @@ migrations/
   0008_custom_license.sql  自定义协议名称与正文
   0009_page_views.sql  匿名页面访问统计
   0010_page_view_country.sql  访问国家或地区代码
+  0011_post_tags.sql         文章标签
+  0012_query_indexes.sql     公开查询索引
 wrangler.jsonc          云端部署配置（不含密钥）
 wrangler.toml           本地配置（Git 忽略）
 ```

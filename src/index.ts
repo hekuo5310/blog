@@ -3,7 +3,7 @@ import type { Context } from 'hono'
 import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, statsPage, searchPage, archivePage, DEFAULT_CONFIG } from './html'
 import type { GiscusConfig, SiteConfig, Post } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish } from './pages'
-import { createSession, validateSession, deleteSession, sessionCookie, clearCookie, isLoginRateLimited, recordLoginFailure, clearLoginFailures } from './auth'
+import { createSession, verifyCredentials, validateSession, deleteSession, sessionCookie, clearCookie, isLoginRateLimited, recordLoginFailure, clearLoginFailures } from './auth'
 import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts, normalizeTags, listTags } from './posts'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries, polishParagraphs } from './ai-summary'
@@ -53,7 +53,8 @@ function usesSecureCookies(c: Context): boolean {
 }
 
 app.use('*', async (c, next) => {
-  await ensureTagMigration(c.env)
+  // 标签列迁移只涉及后台写路径；公开只读请求无需承担这次 D1 往返。
+  if (c.req.path.startsWith('/admin')) await ensureTagMigration(c.env)
   await next()
 })
 
@@ -215,9 +216,9 @@ app.post('/admin/login', async (c) => {
     return c.html(loginPage('登录尝试过多，请在 15 分钟后重试'), 429, { 'Retry-After': '900' })
   }
   const form = await c.req.formData()
-  const username = form.get('username') as string
-  const password = form.get('password') as string
-  if (username !== c.env.ADMIN_USER || password !== c.env.ADMIN_PASS) {
+  const username = form.get('username')
+  const password = form.get('password')
+  if (typeof username !== 'string' || typeof password !== 'string' || !await verifyCredentials(c.env, username, password)) {
     await recordLoginFailure(c)
     return c.html(loginPage('用户名或密码错误'), 401)
   }

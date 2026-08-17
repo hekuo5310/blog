@@ -13,8 +13,36 @@ export function getCookie(req: Request, name: string): string | undefined {
     const trimmed = part.trim()
     const eq = trimmed.indexOf('=')
     if (eq === -1) continue
-    if (trimmed.slice(0, eq) === name) return decodeURIComponent(trimmed.slice(eq + 1))
+    if (trimmed.slice(0, eq) !== name) continue
+    try {
+      return decodeURIComponent(trimmed.slice(eq + 1))
+    } catch {
+      return undefined
+    }
   }
+}
+
+async function hashEqual(left: string, right: string): Promise<boolean> {
+  const encoder = new TextEncoder()
+  const [leftDigest, rightDigest] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(left)),
+    crypto.subtle.digest('SHA-256', encoder.encode(right))
+  ])
+  const leftBytes = new Uint8Array(leftDigest)
+  const rightBytes = new Uint8Array(rightDigest)
+  if (leftBytes.length !== rightBytes.length) return false
+  let diff = 0
+  for (let i = 0; i < leftBytes.length; i++) diff |= leftBytes[i] ^ rightBytes[i]
+  return diff === 0
+}
+
+/** 用常数时间比较登录凭据，避免通过响应时间探测账号/密码。 */
+export async function verifyCredentials(env: Env, username: string, password: string): Promise<boolean> {
+  const [usernameOk, passwordOk] = await Promise.all([
+    hashEqual(username, env.ADMIN_USER),
+    hashEqual(password, env.ADMIN_PASS)
+  ])
+  return usernameOk && passwordOk
 }
 
 function secureRequest(c: Context<{ Bindings: Env }>): boolean {

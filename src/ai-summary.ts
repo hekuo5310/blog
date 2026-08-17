@@ -4,6 +4,8 @@ import { isConfigured } from './config'
 const BLOCK_RE = /\[ai-summary\]([\s\S]*?)\[\/ai-summary\]/g
 const AI_TIMEOUT_MS = 30_000
 const MAX_SUMMARY_BLOCK_CHARS = 20_000
+const MAX_SUMMARY_BLOCKS = 10
+const SUMMARY_CONCURRENCY = 3
 const MAX_POLISH_PARAGRAPHS = 50
 const MAX_POLISH_CHARS = 120_000
 
@@ -63,14 +65,22 @@ async function chatCompletion(env: Env, messages: Array<{ role: 'system' | 'user
 }
 
 export async function generateSummaries(env: Env, blocks: string[]): Promise<string[]> {
-  if (!isConfigured(env.OPENAI_API_KEY) || !blocks.length) return blocks.map(() => '')
-  return Promise.all(blocks.map(async block => {
-    if (block.length > MAX_SUMMARY_BLOCK_CHARS) return ''
-    return chatCompletion(env, [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: block }
-    ], 500)
-  }))
+  const results = blocks.map(() => '')
+  if (!isConfigured(env.OPENAI_API_KEY) || !blocks.length) return results
+
+  const bounded = blocks.slice(0, MAX_SUMMARY_BLOCKS).map(block => block.slice(0, MAX_SUMMARY_BLOCK_CHARS))
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(SUMMARY_CONCURRENCY, bounded.length) }, async () => {
+    while (cursor < bounded.length) {
+      const index = cursor++
+      results[index] = await chatCompletion(env, [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: bounded[index] }
+      ], 500)
+    }
+  })
+  await Promise.all(workers)
+  return results
 }
 
 export async function polishParagraphs(env: Env, paragraphs: string[]): Promise<string[]> {

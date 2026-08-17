@@ -713,7 +713,7 @@ ${MARKDOWN_SCRIPT}
 (function(){
 const src=document.getElementById('md-src'),prev=document.getElementById('md-prev'),status=document.getElementById('image-upload-status');
 function render(){prev.innerHTML=window.renderMarkdown(src.value||'');}
-document.getElementById('polish-all').addEventListener('click',async function(){var parts=src.value.split(/\n{2,}/);setStatus('AI 润色中...');var res=await fetch('/admin/polish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paragraphs:parts})});var data=await res.json();if(!res.ok||!data.paragraphs){setStatus('润色失败');return}var chosen=[];parts.forEach(function(before,i){var after=data.paragraphs[i];if(after&&after!==before&&confirm('替换这段？\n\n原文：\n'+before.slice(0,180)+'\n\n润色后：\n'+after.slice(0,180)))chosen.push(after);else chosen.push(before)});src.value=chosen.join('\n\n');render();setStatus('已更新')});
+document.getElementById('polish-all').addEventListener('click',async function(){var parts=src.value.split(/\\n{2,}/);setStatus('AI 润色中...');var res=await fetch('/admin/polish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paragraphs:parts})});var data=await res.json();if(!res.ok||!data.paragraphs){setStatus('润色失败');return}var chosen=[];parts.forEach(function(before,i){var after=data.paragraphs[i];if(after&&after!==before&&confirm('替换这段？\\n\\n原文：\\n'+before.slice(0,180)+'\\n\\n润色后：\\n'+after.slice(0,180)))chosen.push(after);else chosen.push(before)});src.value=chosen.join('\\n\\n');render();setStatus('已更新')});
 function setStatus(text){if(status)status.textContent=text||'';}
 function insertText(text){
   const start=src.selectionStart||0,end=src.selectionEnd||0;

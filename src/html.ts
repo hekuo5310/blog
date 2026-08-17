@@ -340,6 +340,7 @@ ${body}
 <footer class="site-footer">
 <script>(function(){var y=new Date(Date.now()+28800000).getUTCFullYear();document.write('© 2026'+(y>2026?'~'+y:'')+' hekuo')})()</script>
 <div style="margin-top:.5rem;display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap"><a href="/terms">用户协议</a><a href="/privacy">隐私协议</a>|<a href="https://icp.gov.moe/?keyword=20262200" target="_blank">萌ICP备20262200号</a></div>
+<div style="margin-top:.9rem"><a href="https://www.travellings.cn/go.html" target="_blank" rel="noopener" title="开往-友链接力"><img id="travelling-icon" src="https://www.travellings.cn/assets/w.png" alt="开往-友链接力" width="120" loading="lazy" style="display:inline-block;vertical-align:middle"></a></div>
 </footer>
 <button class="back-to-top" id="back-to-top" type="button" aria-label="返回顶部" title="返回顶部">↑</button>
 <script id="update-data" type="application/json">${updateJson.replace(/</g, '\\u003c')}</script>
@@ -354,6 +355,8 @@ ${body}
     btn.setAttribute('aria-label',dark?'切换日间模式':'切换夜间模式');
     btn.setAttribute('title',dark?'切换日间模式':'切换夜间模式');
     btn.setAttribute('aria-pressed',String(dark));
+    var trav=document.getElementById('travelling-icon');
+    if(trav) trav.src='https://www.travellings.cn/assets/'+(dark?'b':'w')+'.png';
   }
   btn.addEventListener('click',function(){
     var next=document.documentElement.dataset.theme==='dark'?'light':'dark';

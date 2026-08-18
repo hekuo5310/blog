@@ -16,6 +16,41 @@ export type GiscusConfig = { repo: string; repoId: string; category: string; cat
 type UpdateItem = { title: string; url: string; createdAt: string }
 export const DEFAULT_CONFIG: SiteConfig = { title: 'Blog', desc: '欢迎来到我的个人博客！这里记录着我的想法、学习和生活。', navLinks: [] }
 
+/**
+ * 解析设置中的导航链接，每行一个，支持 Markdown 链接（推荐）与旧的「名称|URL」格式。
+ * 示例：
+ *   [归档](/archive)
+ *   关于|/p/about
+ */
+export function parseNavLinks(raw: string): SiteConfig['navLinks'] {
+  if (!raw) return []
+  const links: SiteConfig['navLinks'] = []
+  for (const line of raw.split('\n')) {
+    const text = line.trim()
+    if (!text) continue
+    let label = ''
+    let url = ''
+    const md = text.match(/^\[([^\]]+)\]\(([^()\s]+)\)$/)
+    if (md) {
+      label = md[1].trim()
+      url = md[2].trim()
+    } else {
+      const idx = text.indexOf('|')
+      if (idx <= 0) continue
+      label = text.slice(0, idx).trim()
+      url = text.slice(idx + 1).trim()
+    }
+    if (label && url) links.push({ label, url })
+  }
+  return links
+}
+
+/** 把导航链接序列化为设置页显示的 Markdown 文本（每行一个）。 */
+export function formatNavLinks(links: SiteConfig['navLinks']): string {
+  return links.map(link => `[${link.label}](${link.url})`).join('\n')
+}
+
+
 const BASE_CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -156,6 +191,12 @@ a:hover{opacity:.7}
 
 /* post list */
 .post-list{margin:1rem 0}
+.pagination{display:flex;align-items:center;justify-content:center;gap:.5rem;margin:2rem 0 1rem;flex-wrap:wrap}
+.pagination a,.pagination .page-current{display:inline-flex;align-items:center;justify-content:center;min-width:2rem;height:2rem;padding:0 .55rem;border:1px solid var(--input-border);border-radius:6px;background:var(--surface);color:var(--text-soft);font-size:.88rem}
+.pagination a:hover{opacity:1;border-color:var(--text);color:var(--text)}
+.pagination .page-current{background:var(--button-bg);color:var(--bg);font-weight:600;border-color:var(--button-bg)}
+.pagination .page-disabled{opacity:.45;pointer-events:none}
+@media(max-width:600px){.pagination{gap:.35rem}.pagination a,.pagination .page-current{min-width:1.75rem;height:1.75rem;padding:0 .45rem;font-size:.8rem}}
 .post-item{display:grid;grid-template-columns:90px 1fr;gap:1rem;padding:1.2rem 0;border-bottom:1px solid var(--border-soft);align-items:start}
 .post-date{font-size:.82rem;color:var(--faint);padding-top:.15rem;font-variant-numeric:tabular-nums}
 .post-title{font-size:1rem;font-weight:600;color:var(--text);margin-bottom:.3rem}
@@ -926,7 +967,22 @@ render(curYear);
 </script>`
 }
 
-export function postList(posts: Post[], activities: PostActivity[], cfg: SiteConfig = DEFAULT_CONFIG): string {
+function pagination(page: number, totalPages: number): string {
+  if (totalPages <= 1) return ''
+  const href = (n: number) => n === 1 ? '/' : `/?page=${n}`
+  const prev = page > 1
+    ? `<a href="${href(page - 1)}" aria-label="上一页">‹</a>`
+    : '<span class="page-current page-disabled" aria-hidden="true">‹</span>'
+  const next = page < totalPages
+    ? `<a href="${href(page + 1)}" aria-label="下一页">›</a>`
+    : '<span class="page-current page-disabled" aria-hidden="true">›</span>'
+  const numbers = Array.from({ length: totalPages }, (_, i) => i + 1).map(n =>
+    n === page ? `<span class="page-current" aria-current="page">${n}</span>` : `<a href="${href(n)}">${n}</a>`
+  ).join('')
+  return `<nav class="pagination" aria-label="文章分页">${prev}${numbers}${next}</nav>`
+}
+
+export function postList(posts: Post[], activities: PostActivity[], cfg: SiteConfig = DEFAULT_CONFIG, page = 1, totalPages = 1): string {
   const items = posts.length
     ? posts.map(p => `<div class="post-item">
   <div class="post-date">${formatUtc8Date(p.created_at)}</div>
@@ -938,6 +994,7 @@ export function postList(posts: Post[], activities: PostActivity[], cfg: SiteCon
 <div class="hero"><h1>${esc(cfg.title)}<span class="cursor"></span></h1><p class="hero-desc">${esc(cfg.desc)}</p></div>
 ${heatmap(activities)}
 <div class="post-list">${items}</div>
+${pagination(page, totalPages)}
 </div>` 
   return layout(cfg.title, body, false, undefined, cfg, updateItems(posts))
 }
@@ -1356,7 +1413,7 @@ export function postForm(post?: Post): string {
 }
 
 export function settingsPage(cfg: SiteConfig, saved = false): string {
-  const navLinksVal = cfg.navLinks.map(l => `${l.label}|${l.url}`).join('\n')
+  const navLinksVal = formatNavLinks(cfg.navLinks)
   return layout('站点设置', `<div class="admin-wrap"><h1>站点设置</h1>
 ${saved ? '<p style="color:green;margin-bottom:1rem">已保存</p>' : ''}
 <form method="post" action="/admin/settings" style="display:flex;flex-direction:column;gap:.75rem;max-width:500px">
@@ -1364,8 +1421,8 @@ ${saved ? '<p style="color:green;margin-bottom:1rem">已保存</p>' : ''}
   <input class="pf-input" name="title" value="${esc(cfg.title)}" required>
   <label style="font-size:.85rem;color:#555">首页描述</label>
   <textarea class="pf-input" name="desc" rows="3">${esc(cfg.desc)}</textarea>
-  <label style="font-size:.85rem;color:#555">导航链接（每行一条，格式: 名称|URL）</label>
-  <textarea class="pf-input" name="navLinks" rows="4" placeholder="归档|/archive&#10;关于|/about">${esc(navLinksVal)}</textarea>
+  <label style="font-size:.85rem;color:#555">导航链接（每行一条 Markdown 链接：[名称](URL)）</label>
+  <textarea class="pf-input" name="navLinks" rows="4" placeholder="[归档](/archive)&#10;[关于](/p/about)">${esc(navLinksVal)}</textarea>
   <div><button class="btn" type="submit">保存</button></div>
 </form></div>
 <style>.pf-input{padding:.65rem 1rem;border:1px solid var(--input-border);border-radius:6px;font-size:.95rem;outline:none;font-family:inherit;width:100%;background:var(--surface);color:var(--text)}.pf-input:focus{border-color:var(--text)}</style>`, true)

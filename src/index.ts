@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, statsPage, searchPage, archivePage, DEFAULT_CONFIG } from './html'
+import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, statsPage, searchPage, archivePage, DEFAULT_CONFIG, parseNavLinks } from './html'
 import type { GiscusConfig, SiteConfig, Post } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish, autosavePage } from './pages'
 import { createSession, verifyCredentials, validateSession, deleteSession, sessionCookie, clearCookie, isLoginRateLimited, recordLoginFailure, clearLoginFailures } from './auth'
-import { listPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts, normalizeTags, listTags, autosavePost } from './posts'
+import { listPublicPosts, listPagedPublicPosts, countPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts, normalizeTags, listTags, autosavePost } from './posts'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries, polishParagraphs } from './ai-summary'
 import { normalizeArticleLicenseInput } from './licenses'
@@ -138,8 +138,13 @@ app.use('/admin/*', async (c, next) => {
 app.get('/images/*', serveImage)
 
 app.get('/', async (c) => {
-  const [posts, activities, cfg] = await Promise.all([listPublicPosts(c), listPublicPostActivities(c), getConfig(c.env)])
-  return c.html(postList(posts, activities, cfg))
+  const page = Math.max(1, Number.parseInt(c.req.query('page') ?? '1', 10) || 1)
+  const PAGE_SIZE = 10
+  const [count, activities, cfg] = await Promise.all([countPublicPosts(c), listPublicPostActivities(c), getConfig(c.env)])
+  const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE))
+  const current = Math.min(page, totalPages)
+  const posts = await listPagedPublicPosts(c, PAGE_SIZE, (current - 1) * PAGE_SIZE)
+  return c.html(postList(posts, activities, cfg, current, totalPages))
 })
 
 app.get('/updates.json', async (c) => {
@@ -243,10 +248,7 @@ app.post('/admin/settings', async (c) => {
   const title = (form.get('title') as string ?? '').trim() || DEFAULT_CONFIG.title
   const desc = (form.get('desc') as string ?? '').trim()
   const navRaw = (form.get('navLinks') as string ?? '').trim()
-  const navLinks = navRaw.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
-    const idx = l.indexOf('|')
-    return idx > 0 ? { label: l.slice(0, idx).trim(), url: l.slice(idx + 1).trim() } : null
-  }).filter(Boolean) as SiteConfig['navLinks']
+  const navLinks = parseNavLinks(navRaw)
   const cfg: SiteConfig = { title, desc, navLinks }
   await c.env.SESSIONS.put('site:config', JSON.stringify(cfg))
   return c.html(settingsPage(cfg, true))

@@ -45,6 +45,17 @@ export async function listPublicPosts(c: Context<{ Bindings: Env }>) {
   return results
 }
 
+export async function countPublicPosts(c: Context<{ Bindings: Env }>): Promise<number> {
+  const row = await c.env.DB.prepare('SELECT COUNT(*) AS count FROM posts WHERE published=1').first<{ count: number }>()
+  return Number(row?.count ?? 0)
+}
+
+export async function listPagedPublicPosts(c: Context<{ Bindings: Env }>, limit: number, offset: number) {
+  const { results } = await c.env.DB.prepare('SELECT * FROM posts WHERE published=1 ORDER BY created_at DESC LIMIT ? OFFSET ?')
+    .bind(limit, offset).all<Post>()
+  return results
+}
+
 export async function searchPublicPosts(c: Context<{ Bindings: Env }>, query: string) {
   const normalized = query.trim().replace(/[%_]/g, '\\$&').slice(0, 100)
   if (!normalized) return []

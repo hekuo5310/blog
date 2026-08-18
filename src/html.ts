@@ -17,10 +17,8 @@ type UpdateItem = { title: string; url: string; createdAt: string }
 export const DEFAULT_CONFIG: SiteConfig = { title: 'Blog', desc: '欢迎来到我的个人博客！这里记录着我的想法、学习和生活。', navLinks: [] }
 
 /**
- * 解析设置中的导航链接，每行一个，支持 Markdown 链接（推荐）与旧的「名称|URL」格式。
- * 示例：
+ * 解析设置中的导航链接，每行一个 Markdown 链接：
  *   [归档](/archive)
- *   关于|/p/about
  */
 export function parseNavLinks(raw: string): SiteConfig['navLinks'] {
   if (!raw) return []
@@ -28,18 +26,10 @@ export function parseNavLinks(raw: string): SiteConfig['navLinks'] {
   for (const line of raw.split('\n')) {
     const text = line.trim()
     if (!text) continue
-    let label = ''
-    let url = ''
     const md = text.match(/^\[([^\]]+)\]\(([^()\s]+)\)$/)
-    if (md) {
-      label = md[1].trim()
-      url = md[2].trim()
-    } else {
-      const idx = text.indexOf('|')
-      if (idx <= 0) continue
-      label = text.slice(0, idx).trim()
-      url = text.slice(idx + 1).trim()
-    }
+    if (!md) continue
+    const label = md[1].trim()
+    const url = md[2].trim()
     if (label && url) links.push({ label, url })
   }
   return links

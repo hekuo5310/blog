@@ -1,6 +1,7 @@
 import { ARTICLE_LICENSES, CUSTOM_ARTICLE_LICENSE, DEFAULT_ARTICLE_LICENSE, articleLicenseDisplayName, getArticleLicense } from './licenses'
 import { currentUtc8Year, databaseUtcToIso, formatUtc8Date, formatUtc8DateTime } from './time'
 import type { StatItem, StatsReport } from './analytics'
+import type { PublicTag } from './posts'
 
 export type Post = { id: number; title: string; slug: string; body: string; published: number; created_at: string; tags?: string | null; ai_summary?: string | null; license?: string | null; custom_license_name?: string | null; custom_license_text?: string | null }
 export type PostActivityChanges = {
@@ -345,7 +346,7 @@ export function layout(title: string, body: string, adminNav = false, _loggedInU
   const updateJson = JSON.stringify(updates)
   const rightNav = adminNav
     ? `<div class="nav-links"><a href="/admin">管理</a><a href="/admin/post/new">新建</a><a href="/admin/settings">设置</a>${themeToggle}<form method="post" action="/admin/logout" style="display:inline"><button class="nav-icon">退出</button></form></div>`
-    : `<div class="nav-links">${extraLinks}<a class="nav-report" href="/search">搜索</a><a class="nav-report" href="/archive">归档</a><a class="nav-report" href="/stats">访问报表</a>${subscribeToggle}${themeToggle}</div>`
+    : `<div class="nav-links">${extraLinks}<a class="nav-report" href="/search">搜索</a><a class="nav-report" href="/tags">标签</a><a class="nav-report" href="/archive">归档</a><a class="nav-report" href="/stats">访问报表</a>${subscribeToggle}${themeToggle}</div>`
   return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(cfg.desc)}"><link rel="alternate" type="application/rss+xml" title="${esc(cfg.title)} RSS" href="/rss.xml"><title>${esc(title)} — ${esc(cfg.title)}</title><script>
 (function(){
   var saved=localStorage.getItem('theme');
@@ -1009,6 +1010,18 @@ export function archivePage(posts: Post[], cfg: SiteConfig = DEFAULT_CONFIG): st
   return layout('文章归档', `<main class="wrap search-page"><h1>文章归档</h1>${sections || '<p class="search-result-summary">暂无文章。</p>'}</main>`, false, undefined, cfg)
 }
 
+export function tagsPage(tags: PublicTag[], cfg: SiteConfig = DEFAULT_CONFIG): string {
+  const links = tags.map(({ tag, count }) => `<a class="post-tag" href="/tag/${encodeURIComponent(tag)}"># ${esc(tag)} <span>(${count})</span></a>`).join('')
+  return layout('文章标签', `<main class="wrap search-page"><h1>文章标签</h1>${links ? `<div class="post-tags">${links}</div>` : '<p class="search-result-summary">暂无标签。</p>'}</main>`, false, undefined, cfg)
+}
+
+export function tagPostsPage(tag: string, posts: Post[], count: number, page: number, totalPages: number, cfg: SiteConfig = DEFAULT_CONFIG): string {
+  const items = posts.map(post => `<article class="post-item"><div class="post-date">${formatUtc8Date(post.created_at)}</div><div><a class="search-result-title" href="/post/${encodeURIComponent(post.slug)}">${esc(post.title)}</a><div class="post-excerpt">${excerpt(post.body, 180)}</div></div></article>`).join('')
+  const link = (n: number) => `/tag/${encodeURIComponent(tag)}${n > 1 ? `?page=${n}` : ''}`
+  const pagination = totalPages > 1 ? `<nav class="pagination" aria-label="标签文章分页">${page > 1 ? `<a href="${link(page - 1)}">上一页</a>` : ''}<span class="page-current" aria-current="page">${page} / ${totalPages}</span>${page < totalPages ? `<a href="${link(page + 1)}">下一页</a>` : ''}</nav>` : ''
+  return layout(`# ${tag}`, `<main class="wrap search-page"><h1># ${esc(tag)}</h1><p class="search-result-summary">${count} 篇文章</p><div class="post-list">${items}</div>${pagination}<a href="/tags">查看所有标签</a></main>`, false, undefined, cfg)
+}
+
 function statList(items: StatItem[], linkPaths = false, labels?: Record<string, string>): string {
   if (!items.length) return '<p class="stats-empty">暂无数据</p>'
   return `<ol class="stats-list">${items.map(item => {
@@ -1145,7 +1158,7 @@ export function postDetail(post: Post, cfg: SiteConfig = DEFAULT_CONFIG, giscus?
   const body = `<div class="wrap article-wrap"><div class="article-layout"><div class="article">
 <h1>${esc(post.title)}</h1>
 <div class="article-meta">${formatUtc8Date(post.created_at)} · 协议：${licenseHtml}</div>
-${tags.length ? `<div class="post-tags">${tags.map(tag=>`<a class="post-tag" href="/search?q=${encodeURIComponent(tag)}"># ${esc(tag)}</a>`).join('')}</div>` : ''}
+${tags.length ? `<div class="post-tags">${tags.map(tag=>`<a class="post-tag" href="/tag/${encodeURIComponent(tag)}"># ${esc(tag)}</a>`).join('')}</div>` : ''}
 <div class="article-tools"><span id="reading-time"></span><button class="article-copy-link" id="copy-link" type="button">复制链接</button></div>
 <div class="article-body" id="post-body"></div>
 <script src="https://cdn.jsdelivr.net/npm/marked@18.0.6/lib/marked.umd.js"></script>

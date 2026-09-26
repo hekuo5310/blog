@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, statsPage, searchPage, archivePage, DEFAULT_CONFIG, parseNavLinks } from './html'
+import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, statsPage, searchPage, archivePage, tagsPage, tagPostsPage, DEFAULT_CONFIG, parseNavLinks } from './html'
 import type { GiscusConfig, SiteConfig, Post } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish, autosavePage } from './pages'
 import { createSession, verifyCredentials, validateSession, deleteSession, sessionCookie, clearCookie, isLoginRateLimited, recordLoginFailure, clearLoginFailures } from './auth'
-import { listPublicPosts, listPagedPublicPosts, countPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts, normalizeTags, listTags, autosavePost } from './posts'
+import { listPublicPosts, listPagedPublicPosts, countPublicPosts, listPublicPostActivities, getPublishedPostBySlug, getPostById, adminListPosts, createPost, updatePost, deletePost, togglePublish, searchPublicPosts, normalizeTags, listTags, listPublicTags, listPublicPostsByTag, countPublicPostsByTag, autosavePost } from './posts'
 import { deleteImageKeys, deleteRemovedImages, extractImageKeys, serveImage, uploadImage } from './images'
 import { extractAiSummaryBlocks, blocksEqual, parseSummaries, generateSummaries, polishParagraphs } from './ai-summary'
 import { normalizeArticleLicenseInput } from './licenses'
@@ -197,6 +197,24 @@ app.get('/search', async (c) => {
 app.get('/archive', async (c) => {
   const [posts, cfg] = await Promise.all([listPublicPosts(c), getConfig(c.env)])
   return c.html(archivePage(posts, cfg))
+})
+
+app.get('/tags', async (c) => {
+  const [tags, cfg] = await Promise.all([listPublicTags(c), getConfig(c.env)])
+  return c.html(tagsPage(tags, cfg))
+})
+
+app.get('/tag/:tag', async (c) => {
+  const tag = c.req.param('tag')
+  if (!tag || tag.length > 30) return c.notFound()
+  const [count, cfg] = await Promise.all([countPublicPostsByTag(c, tag), getConfig(c.env)])
+  if (!count) return c.notFound()
+  const pageSize = 20
+  const totalPages = Math.ceil(count / pageSize)
+  const requested = Number(c.req.query('page'))
+  const page = Number.isSafeInteger(requested) && requested > 0 ? Math.min(requested, totalPages) : 1
+  const posts = await listPublicPostsByTag(c, tag, pageSize, (page - 1) * pageSize)
+  return c.html(tagPostsPage(tag, posts, count, page, totalPages, cfg))
 })
 
 app.get('/post/:slug', async (c) => {

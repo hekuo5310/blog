@@ -53,8 +53,8 @@ function usesSecureCookies(c: Context): boolean {
 }
 
 app.use('*', async (c, next) => {
-  // 标签列迁移只涉及后台写路径；公开只读请求无需承担这次 D1 往返。
-  if (c.req.path.startsWith('/admin')) await ensureTagMigration(c.env)
+  // 标签页需要读取 tags 列；旧站点在首次访问时也能自动完成迁移。
+  if (c.req.path.startsWith('/admin') || c.req.path === '/tags' || c.req.path.startsWith('/tag/')) await ensureTagMigration(c.env)
   await next()
 })
 

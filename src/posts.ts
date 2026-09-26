@@ -57,7 +57,7 @@ export async function listPagedPublicPosts(c: Context<{ Bindings: Env }>, limit:
 }
 
 export async function searchPublicPosts(c: Context<{ Bindings: Env }>, query: string) {
-  const normalized = query.trim().replace(/[%_]/g, '\\$&').slice(0, 100)
+  const normalized = query.trim().slice(0, 100).replace(/[\\%_]/g, '\\$&')
   if (!normalized) return []
   const pattern = `%${normalized}%`
   const { results } = await c.env.DB.prepare(`
@@ -67,6 +67,41 @@ export async function searchPublicPosts(c: Context<{ Bindings: Env }>, query: st
     LIMIT 50
   `).bind(pattern, pattern, pattern).all<Post>()
   return results
+}
+
+export type PublicTag = { tag: string; count: number }
+
+export async function listPublicTags(c: Context<{ Bindings: Env }>): Promise<PublicTag[]> {
+  const { results } = await c.env.DB.prepare(`
+    SELECT tag.value AS tag, COUNT(*) AS count
+    FROM posts, json_each(CASE WHEN json_valid(posts.tags) THEN posts.tags ELSE '[]' END) AS tag
+    WHERE posts.published=1 AND tag.type='text'
+    GROUP BY tag.value ORDER BY count DESC, tag.value COLLATE NOCASE
+  `).all<PublicTag>()
+  return results
+}
+
+export async function listPublicPostsByTag(c: Context<{ Bindings: Env }>, tag: string, limit: number, offset: number): Promise<Post[]> {
+  const { results } = await c.env.DB.prepare(`
+    SELECT * FROM posts
+    WHERE published=1 AND EXISTS (
+      SELECT 1 FROM json_each(CASE WHEN json_valid(posts.tags) THEN posts.tags ELSE '[]' END)
+      WHERE value=? AND type='text'
+    )
+    ORDER BY created_at DESC LIMIT ? OFFSET ?
+  `).bind(tag, limit, offset).all<Post>()
+  return results
+}
+
+export async function countPublicPostsByTag(c: Context<{ Bindings: Env }>, tag: string): Promise<number> {
+  const row = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS count FROM posts
+    WHERE published=1 AND EXISTS (
+      SELECT 1 FROM json_each(CASE WHEN json_valid(posts.tags) THEN posts.tags ELSE '[]' END)
+      WHERE value=? AND type='text'
+    )
+  `).bind(tag).first<{ count: number }>()
+  return Number(row?.count ?? 0)
 }
 
 type ActivityRow = Omit<PostActivity, 'changes'> & { changes: string }
@@ -229,8 +264,7 @@ export async function autosavePost(c: Context<{ Bindings: Env }>, id: number | n
 
   const finalTitle = cleanTitle || '无标题草稿'
   const slug = await uniqueSlug(c, toSlug(finalTitle))
-  await c.env.DB.prepare('INSERT INTO posts (title,slug,body,ai_summary,license,custom_license_name,custom_license_text,tags) VALUES (?,?,?,?,?,?,?,?)')
+  const result = await c.env.DB.prepare('INSERT INTO posts (title,slug,body,ai_summary,license,custom_license_name,custom_license_text,tags) VALUES (?,?,?,?,?,?,?,?)')
     .bind(finalTitle, slug, cleanBody, null, DEFAULT_ARTICLE_LICENSE, '', '', '[]').run()
-  const row = await c.env.DB.prepare('SELECT last_insert_rowid() AS id').first<{ id: number }>()
-  return { status: 'saved', id: Number(row?.id ?? 0) }
+  return { status: 'saved', id: result.meta.last_row_id }
 }

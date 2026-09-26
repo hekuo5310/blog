@@ -88,7 +88,6 @@ export async function autosavePage(c: Context<{ Bindings: Env }>, id: number | n
 
   const finalTitle = cleanTitle || '无标题草稿'
   const slug = await uniqueSlug(c, toSlug(finalTitle))
-  await c.env.DB.prepare('INSERT INTO pages (title,slug,body) VALUES (?,?,?)').bind(finalTitle, slug, cleanBody).run()
-  const row = await c.env.DB.prepare('SELECT last_insert_rowid() AS id').first<{ id: number }>()
-  return { status: 'saved', id: Number(row?.id ?? 0) }
+  const result = await c.env.DB.prepare('INSERT INTO pages (title,slug,body) VALUES (?,?,?)').bind(finalTitle, slug, cleanBody).run()
+  return { status: 'saved', id: result.meta.last_row_id }
 }

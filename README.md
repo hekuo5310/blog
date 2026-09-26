@@ -41,6 +41,7 @@ wrangler secret put GISCUS_CATEGORY_ID
 - 安全渲染：Markdown 经 DOMPurify 清洗，草稿仅后台可见，管理员登录带失败次数限制
 - 健康检查：`/healthz`
 - 搜索与收录：`/search` 搜索标题和正文；自动生成 `/robots.txt` 与 `/sitemap.xml`，便于搜索引擎发现公开内容
+- 标签浏览：`/tags` 显示已发布文章的标签和文章数，点击标签可按标签精确筛选文章；草稿标签不会公开
 
 ## 安全提示
 

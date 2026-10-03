@@ -4,7 +4,7 @@
 
 配置完成后，从博客导航栏的「Token 统计」进入独立页面：
 
-<https://blog.hekuo.workers.dev/chatgpt-stats>
+<https://www.io.hk.cn/chatgpt-stats>
 
 页面展示累计 Tokens、单日峰值、最长任务、最长/当前连续天数、最近同步时间、逐日热力图和累计曲线。
 
@@ -61,18 +61,18 @@ npx wrangler secret put SYNC_TOKEN --config wrangler.jsonc
 
 | 位置 | 填写内容 |
 | --- | --- |
-| `@connect YOUR_BLOG_DOMAIN` | `@connect blog.hekuo.workers.dev` |
-| `WORKER_URL` | `https://blog.hekuo.workers.dev/api/chatgpt-stats/update` |
+| `@connect YOUR_BLOG_DOMAIN` | `@connect 地址` |
+| `WORKER_URL` | `https://地址/api/chatgpt-stats/update` |
 | `SYNC_TOKEN` | 第 2 步设置到 Worker Secret 的同一个值 |
-| `USERNAME` | 保持现有的 `hekuo5310` |
+| `USERNAME` | GPT username |
 
 对应的配置片段如下，直接在原脚本中替换，不另装一套同步脚本：
 
 ```javascript
-// @connect      blog.hekuo.workers.dev
+// @connect      地址
 
 const WORKER_URL =
-  "https://blog.hekuo.workers.dev/api/chatgpt-stats/update";
+  "https://地址/api/chatgpt-stats/update";
 
 const SYNC_TOKEN =
   "在这里填写与 Worker Secret 相同的值";
@@ -101,12 +101,12 @@ localStorage.removeItem("zerexa-chatgpt-last-sync");
 
 浏览器直接打开：
 
-<https://blog.hekuo.workers.dev/api/chatgpt-stats>
+<https://地址/api/chatgpt-stats>
 
 无需登录，也无需携带密钥。还可以运行：
 
 ```bash
-curl -i https://blog.hekuo.workers.dev/api/chatgpt-stats
+curl -i https://地址/api/chatgpt-stats
 ```
 
 首次未同步时返回 HTTP 200 和 JSON `null`。同步成功后返回八项统计字段及服务器生成的 `updatedAt`，例如 `2026-10-03T10:30:00.000Z`。
@@ -132,14 +132,14 @@ $payload = @{
 
 try {
   Invoke-RestMethod -Method Post `
-    -Uri 'https://blog.hekuo.workers.dev/api/chatgpt-stats/update' `
+    -Uri 'https://地址/api/chatgpt-stats/update' `
     -Headers @{ Authorization = "Bearer $syncToken" } `
     -ContentType 'application/json' -Body $payload
 } finally {
   Remove-Variable syncToken
 }
 
-Invoke-RestMethod -Uri 'https://blog.hekuo.workers.dev/api/chatgpt-stats'
+Invoke-RestMethod -Uri 'https://地址/api/chatgpt-stats'
 ```
 
 正确 POST 返回 HTTP 200 和 `{ "ok": true, "updatedAt": "..." }`。不需要在测试请求中携带任何 ChatGPT 登录凭据。

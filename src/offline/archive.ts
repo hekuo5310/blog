@@ -1,3 +1,4 @@
+import { ArchivePack, ArchiveSizeError } from './pack'
 import type { Context } from 'hono'
 import type { Env } from '../index'
 import { listPublicPosts, listPublicPostActivities, listPublicTags } from '../posts'
@@ -35,9 +36,16 @@ export function offlineAsset(c: Context<{ Bindings: Env }>) {
   return c.body(text, 200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' })
 }
 export async function offlineArchive(c: Context<{ Bindings: Env }>) {
+  try { return await buildArchive(c) }
+  catch (error) {
+    if (error instanceof ArchiveSizeError) return c.json({ error: error.message }, 413)
+    throw error
+  }
+}
+async function buildArchive(c: Context<{ Bindings: Env }>) {
   const s = await snapshot(c)
-  const entries: { path: string; type: string; body: string; base64?: boolean }[] = []
-  const add = (path: string, body: string, type = 'text/html; charset=utf-8') => entries.push({ path, type, body })
+  const pack = new ArchivePack(s.version)
+  const add = (path: string, body: string, type = 'text/html; charset=utf-8') => pack.add({ path, type, body })
   const total = Math.max(1, Math.ceil(s.posts.length / 10))
   for (let page = 1; page <= total; page++) {
     const html = postList(s.posts.slice((page - 1) * 10, page * 10), s.activities, s.cfg, page, total)
@@ -69,21 +77,20 @@ export async function offlineArchive(c: Context<{ Bindings: Env }>) {
   add('/terms', termsPage(s.cfg)); add('/privacy', privacyPage(s.cfg))
   for (const [path, body] of Object.entries(assets)) add(path, body, 'text/javascript; charset=utf-8')
   const keys = new Set([...s.posts, ...s.pages].flatMap(p => extractImageKeys(p.body)))
-  let bytes = entries.reduce((n, e) => n + new TextEncoder().encode(e.body).length, 0)
   // Keep archive generation below the Worker memory limit; never silently enable a partial snapshot.
   for (const key of keys) {
     if (key.includes('..')) continue
     const image = await c.env.IMAGES.get(key)
     if (!image) continue
-    bytes += image.size
-    if (bytes > 32 * 1024 * 1024) return c.json({ error: '公开内容超过离线包 32 MiB 上限' }, 413)
+    const path = '/images/' + key
+    const type = image.httpMetadata?.contentType || 'application/octet-stream'
+    pack.checkImage(path, type, image.size)
     const data = new Uint8Array(await image.arrayBuffer())
-    let binary = ''
-    for (let i = 0; i < data.length; i += 8192) binary += String.fromCharCode(...data.subarray(i, i + 8192))
-    entries.push({ path: '/images/' + key, type: image.httpMetadata?.contentType || 'application/octet-stream', body: btoa(binary), base64: true })
+    const chunks: string[] = []
+    // Chunk size is divisible by 3, so intermediate Base64 chunks have no padding.
+    for (let i = 0; i < data.length; i += 8190) chunks.push(btoa(String.fromCharCode(...data.subarray(i, i + 8190))))
+    pack.add({ path, type, body: chunks.join(''), base64: true })
   }
-  if (bytes > 32 * 1024 * 1024) return c.json({ error: '公开内容超过离线包 32 MiB 上限' }, 413)
-  const json = JSON.stringify({ version: s.version, entries })
-  const stream = new Response(json).body!.pipeThrough(new CompressionStream('gzip'))
+  const stream = pack.stream().pipeThrough(new CompressionStream('gzip'))
   return new Response(stream, { headers: { 'Content-Type': 'application/gzip', 'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="blog-offline.json.gz"' } })
 }

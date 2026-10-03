@@ -13,9 +13,13 @@ async function clear(reason) {
   await notify(reason);
 }
 async function version() {
-  const r = await fetch('/offline/version', { cache: 'no-store', credentials: 'omit', signal: AbortSignal.timeout(5000) });
-  if (!r.ok) throw Error('无法检查版本');
-  return (await r.json()).version;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const r = await fetch('/offline/version', { cache: 'no-store', credentials: 'omit', signal: controller.signal });
+    if (!r.ok) throw Error('无法检查版本');
+    return (await r.json()).version;
+  } finally { clearTimeout(timer); }
 }
 async function check() {
   if (checking) return checking;
@@ -83,12 +87,16 @@ async function offlineSearch(url, cache) {
 }
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || url.origin !== origin || !allowed(url.pathname)) return;
+  if (e.request.method !== 'GET' || url.origin !== origin) return;
+  const navigate = e.request.mode === 'navigate';
+  if (!navigate && !allowed(url.pathname)) return;
   e.respondWith((async () => {
     await mutation;
     let s = await state();
     if (!s) return fetch(e.request);
-    if (e.request.mode === 'navigate' && await check()) return fetch(e.request);
+    if (navigate) await check();
+    // Every same-origin navigation checks for updates, but private/dynamic routes are network-only.
+    if (!allowed(url.pathname)) return fetch(e.request);
     s = await state(); if (!s) return fetch(e.request);
     const cache = await caches.open(s.cache);
     if (url.pathname === '/search') return offlineSearch(url, cache);

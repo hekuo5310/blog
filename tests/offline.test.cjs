@@ -13,7 +13,7 @@ function harness(pack) {
       return { async match(key) { return store.get(key)?.clone(); }, async put(key, response) { if (failPut && name.includes('content')) throw Error('quota'); store.set(key, response.clone()); }, async delete(key) { return store.delete(key); } };
     }, async keys() { return [...stores.keys()]; }, async delete(name) { return stores.delete(name); },
   };
-  vm.runInNewContext(source, { self: { location: { origin: 'https://blog.test' }, clients: { async matchAll() { return []; }, async claim() {} }, skipWaiting() {}, addEventListener(type, fn) { handlers[type] = fn; } }, caches, URL, Response, Request, Uint8Array, AbortSignal, DecompressionStream, atob,
+  vm.runInNewContext(source, { self: { location: { origin: 'https://blog.test' }, clients: { async matchAll() { return []; }, async claim() {} }, skipWaiting() {}, addEventListener(type, fn) { handlers[type] = fn; } }, caches, URL, Response, Request, Uint8Array, AbortController, setTimeout, clearTimeout, DecompressionStream, atob,
     async fetch(input) {
       const url = typeof input === 'string' ? input : input.url; network.push(url);
       if (offline) throw Error('offline');
@@ -64,4 +64,16 @@ test('archive rejects admin entries and stale download', async () => {
 test('evicted content resets offline state', async () => {
   const h = harness(makePack()); await h.message('enable'); for (const name of h.stores.keys()) if (name.includes('content')) h.stores.delete(name);
   assert.equal((await h.message('check')).state, null);
+});
+test('direct admin navigation checks version and never serves stale editor assets', async () => {
+  const pack = makePack(); pack.entries.push({ path: '/offline/marked.js', type: 'text/javascript', body: 'OLD_RENDERER' });
+  const h = harness(pack); await h.message('enable'); h.setVersion('b'.repeat(64));
+  assert.equal(await (await h.request('/admin/post/1/edit', true)).text(), 'NETWORK');
+  assert.equal((await h.message('state')).state, null);
+  assert.equal(await (await h.request('/offline/marked.js')).text(), 'NETWORK');
+});
+test('enable and version checks work with no AbortSignal.timeout global', async () => {
+  // The VM intentionally exposes AbortController and timers, but no AbortSignal.
+  const h = harness(makePack()); assert.equal((await h.message('enable')).ok, true);
+  assert.ok((await h.message('check')).state);
 });

@@ -9,7 +9,7 @@ let api;
 before(async () => {
   const result = await build({ entryPoints: ['src/offline/archive.ts'], bundle: true, platform: 'node', format: 'cjs', write: false, loader: { '.txt': 'text' } });
   const module = { exports: {} };
-  vm.runInNewContext(result.outputFiles[0].text, { module, exports: module.exports, require, Response, Headers, TextEncoder, Uint8Array, CompressionStream, crypto: webcrypto, btoa, URL, console });
+  vm.runInNewContext(result.outputFiles[0].text, { module, exports: module.exports, require, Response, Headers, TextEncoder, Uint8Array, ReadableStream, CompressionStream, crypto: webcrypto, btoa, URL, console });
   api = module.exports;
 });
 function context(id = 'deployment-one', body = '# Public\n![picture](/images/public.png)') {
@@ -43,4 +43,15 @@ test('deployment and public content edits change the version', async () => {
   const repeat = await (await api.offlineVersion(context().c)).json(); assert.equal(one.version, repeat.version);
   const deploy = await (await api.offlineVersion(context('deployment-two').c)).json(); assert.notEqual(one.version, deploy.version);
   const edit = await (await api.offlineVersion(context('deployment-one', 'Updated text').c)).json(); assert.notEqual(one.version, edit.version);
+});
+test('oversized Base64 representation is rejected before image bytes are read', async () => {
+  const { c } = context(); let read = false;
+  c.env.IMAGES.get = async () => ({ size: 30 * 1024 * 1024, httpMetadata: { contentType: 'image/png' }, async arrayBuffer() { read = true; throw Error('must not read'); } });
+  const response = await api.offlineArchive(c); assert.equal(response.status, 413); assert.equal(read, false);
+});
+test('chunked image Base64 preserves bytes across chunk and padding boundaries', async () => {
+  const { c } = context(); const image = Uint8Array.from({ length: 16385 }, (_, i) => i % 256);
+  c.env.IMAGES.get = async () => ({ size: image.length, httpMetadata: { contentType: 'image/png' }, async arrayBuffer() { return image.buffer; } });
+  const pack = JSON.parse(gunzipSync(Buffer.from(await (await api.offlineArchive(c)).arrayBuffer())));
+  assert.equal(pack.entries.find(e => e.path === '/images/public.png').body, Buffer.from(image).toString('base64'));
 });

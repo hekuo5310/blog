@@ -1,0 +1,103 @@
+/* Only explicit archive entries are cached. Admin, reports, and writes always use the network. */
+const META = 'blog-offline-state-v1';
+const PREFIX = 'blog-offline-content-v1-';
+let mutation = Promise.resolve();
+let checking;
+const origin = self.location.origin;
+const stateURL = origin + '/offline/state';
+async function state() { const r = await (await caches.open(META)).match(stateURL); return r ? r.json() : null; }
+async function notify(reason) { for (const c of await self.clients.matchAll()) c.postMessage({ type: 'offline-state', reason }); }
+async function clear(reason) {
+  await (await caches.open(META)).delete(stateURL);
+  for (const name of await caches.keys()) if (name.startsWith(PREFIX)) await caches.delete(name);
+  await notify(reason);
+}
+async function version() {
+  const r = await fetch('/offline/version', { cache: 'no-store', credentials: 'omit', signal: AbortSignal.timeout(5000) });
+  if (!r.ok) throw Error('无法检查版本');
+  return (await r.json()).version;
+}
+async function check() {
+  if (checking) return checking;
+  checking = (async () => {
+    const s = await state(); if (!s) return false;
+    if (!await (await caches.open(s.cache)).match(origin + '/')) { await clear('evicted'); return false; }
+    try { if (await version() !== s.version) { await clear('updated'); return true; } } catch {}
+    return false;
+  })().finally(() => { checking = null; });
+  return checking;
+}
+function allowed(path) {
+  return /^\/(?:\?page=\d+|post\/[^/?]+|p\/[^/?]+|tag\/[^/?]+(?:\?page=\d+)?|archive|search|tags|terms|privacy|rss\.xml|feed\.xml|updates\.json|images\/[A-Za-z0-9/_\-.]+|offline\/(?:client\.js|marked\.js|purify\.js|search\.json))?$/.test(path) && !path.includes('..');
+}
+async function enable() {
+  const r = await fetch('/offline/archive', { cache: 'no-store', credentials: 'omit' });
+  if (!r.ok) throw Error('离线包下载失败（' + r.status + '）');
+  const pack = await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).json();
+  if (!/^[a-f0-9]{64}$/.test(pack.version) || !Array.isArray(pack.entries)) throw Error('离线包格式错误');
+  const name = PREFIX + pack.version;
+  const previous = await state();
+  if (previous?.cache === name) return;
+  await caches.delete(name);
+  try {
+    const cache = await caches.open(name);
+    const seen = new Set();
+    for (const entry of pack.entries) {
+      if (!allowed(entry.path) || seen.has(entry.path) || typeof entry.body !== 'string' || typeof entry.type !== 'string') throw Error('离线包含非法条目');
+      seen.add(entry.path);
+      const body = entry.base64 ? Uint8Array.from(atob(entry.body), c => c.charCodeAt(0)) : entry.body;
+      await cache.put(origin + entry.path, new Response(body, { headers: { 'Content-Type': entry.type, 'X-Content-Type-Options': 'nosniff' } }));
+    }
+    if (!seen.has('/') || !seen.has('/offline/client.js')) throw Error('离线包不完整');
+    if (await version() !== pack.version) throw Error('下载期间博客已更新，请重试');
+    await (await caches.open(META)).put(stateURL, new Response(JSON.stringify({ version: pack.version, cache: name })));
+    for (const old of await caches.keys()) if (old.startsWith(PREFIX) && old !== name) await caches.delete(old);
+    await notify('enabled');
+  } catch (error) { await caches.delete(name); throw error; }
+}
+self.addEventListener('install', e => e.waitUntil(self.skipWaiting()));
+self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+self.addEventListener('message', e => {
+  const port = e.ports[0];
+  mutation = mutation.catch(() => {}).then(async () => {
+    try {
+      if (e.data.type === 'enable') await enable();
+      else if (e.data.type === 'disable') await clear('disabled');
+      else if (e.data.type === 'check') await check();
+      port?.postMessage({ ok: true, state: await state() });
+    } catch (error) { port?.postMessage({ ok: false, error: error.message }); }
+  });
+  e.waitUntil(mutation);
+});
+const escapeHTML = value => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+async function offlineSearch(url, cache) {
+  const q = (url.searchParams.get('q') || '').trim().slice(0, 100);
+  let html = await (await cache.match(origin + '/search')).text();
+  const posts = await (await cache.match(origin + '/offline/search.json')).json();
+  const term = q.toLowerCase();
+  const matches = term ? posts.filter(p => p.title.toLowerCase().includes(term) || p.body.toLowerCase().includes(term))
+    .sort((a, b) => Number(b.title.toLowerCase().includes(term)) - Number(a.title.toLowerCase().includes(term))).slice(0, 50) : [];
+  html = html.replace('name="q" value=""', 'name="q" value="' + escapeHTML(q) + '"');
+  html = html.replace(/<p class="search-result-summary">[\s\S]*?<\/p>/, '<p class="search-result-summary">' + (term ? '找到 ' + matches.length + ' 篇相关文章。' : '输入关键词，搜索标题和正文。') + '</p><div class="post-list">' + matches.map(p => p.html).join('') + '</div>');
+  return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.origin !== origin || !allowed(url.pathname)) return;
+  e.respondWith((async () => {
+    await mutation;
+    let s = await state();
+    if (!s) return fetch(e.request);
+    if (e.request.mode === 'navigate' && await check()) return fetch(e.request);
+    s = await state(); if (!s) return fetch(e.request);
+    const cache = await caches.open(s.cache);
+    if (url.pathname === '/search') return offlineSearch(url, cache);
+    const paged = url.pathname === '/' || url.pathname.startsWith('/tag/');
+    const page = Number(url.searchParams.get('page'));
+    const key = url.pathname + (paged && Number.isSafeInteger(page) && page > 0 ? '?page=' + page : '');
+    const response = await cache.match(origin + key);
+    if (response) return response;
+    if (e.request.mode === 'navigate') return new Response('<meta charset="utf-8"><p>此页面不在离线包中。<a href="/">返回博客首页</a></p>', { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    return fetch(e.request);
+  })());
+});

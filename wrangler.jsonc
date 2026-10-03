@@ -4,6 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2024-09-23",
   "keep_vars": true,
+  "version_metadata": { "binding": "VERSION" },
   "d1_databases": [
     {
       "binding": "DB",

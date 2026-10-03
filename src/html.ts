@@ -346,7 +346,7 @@ export function layout(title: string, body: string, adminNav = false, _loggedInU
   const updateJson = JSON.stringify(updates)
   const rightNav = adminNav
     ? `<div class="nav-links"><a href="/admin">管理</a><a href="/admin/post/new">新建</a><a href="/admin/settings">设置</a>${themeToggle}<form method="post" action="/admin/logout" style="display:inline"><button class="nav-icon">退出</button></form></div>`
-    : `<div class="nav-links">${extraLinks}<a class="nav-report" href="/search">搜索</a><a class="nav-report" href="/tags">标签</a><a class="nav-report" href="/archive">归档</a><a class="nav-report" href="/stats">访问报表</a>${subscribeToggle}${themeToggle}</div>`
+    : `<div class="nav-links">${extraLinks}<a class="nav-report" href="/search">搜索</a><a class="nav-report" href="/tags">标签</a><a class="nav-report" href="/archive">归档</a><a class="nav-report" href="/stats">访问报表</a>${subscribeToggle}<button type="button" class="nav-icon" id="offline-toggle" aria-pressed="false">启用离线模式</button>${themeToggle}</div>`
   return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(cfg.desc)}"><link rel="alternate" type="application/rss+xml" title="${esc(cfg.title)} RSS" href="/rss.xml"><title>${esc(title)} — ${esc(cfg.title)}</title><script>
 (function(){
   var saved=localStorage.getItem('theme');
@@ -354,7 +354,7 @@ export function layout(title: string, body: string, adminNav = false, _loggedInU
   document.documentElement.dataset.theme=saved||(systemDark?'dark':'light');
 })();
 (function(){try{if(!/(?:^|;\s*)pv_w=\d+/.test(document.cookie)){document.cookie='pv_w='+window.screen.width+';path=/;max-age=86400'}}catch(e){}})();
-</script><link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet"><style>${BASE_CSS}</style></head><body>
+</script>${adminNav ? '<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">' : '<script src="/offline/client.js" defer></script>'}<style>${BASE_CSS}</style></head><body>
 <nav class="nav"><a href="/" class="nav-logo">${esc(cfg.title)}</a>${rightNav}</nav>
 ${body}
 <div class="update-toast" id="update-toast" role="dialog" aria-live="polite" aria-label="发现新文章">
@@ -741,8 +741,8 @@ ${titleField}
   </div>
   <div class="preview-pane" id="md-prev"></div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/marked@18.0.6/lib/marked.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
+<script src="/offline/marked.js"></script>
+<script src="/offline/purify.js"></script>
 ${MARKDOWN_SCRIPT}
 <script>
 (function(){
@@ -1161,8 +1161,8 @@ export function postDetail(post: Post, cfg: SiteConfig = DEFAULT_CONFIG, giscus?
 ${tags.length ? `<div class="post-tags">${tags.map(tag=>`<a class="post-tag" href="/tag/${encodeURIComponent(tag)}"># ${esc(tag)}</a>`).join('')}</div>` : ''}
 <div class="article-tools"><span id="reading-time"></span><button class="article-copy-link" id="copy-link" type="button">复制链接</button></div>
 <div class="article-body" id="post-body"></div>
-<script src="https://cdn.jsdelivr.net/npm/marked@18.0.6/lib/marked.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
+<script src="/offline/marked.js"></script>
+<script src="/offline/purify.js"></script>
 ${MARKDOWN_SCRIPT}
 <script>
 (function(){
@@ -1298,8 +1298,8 @@ export function pageDetail(page: PageItem, cfg: SiteConfig = DEFAULT_CONFIG): st
   const body = `<div class="wrap article-wrap"><div class="article-layout"><div class="article">
 <h1>${esc(page.title)}</h1>
 <div class="article-body" id="post-body"></div>
-<script src="https://cdn.jsdelivr.net/npm/marked@18.0.6/lib/marked.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
+<script src="/offline/marked.js"></script>
+<script src="/offline/purify.js"></script>
 ${MARKDOWN_SCRIPT}
 <script>document.getElementById('post-body').innerHTML=window.renderMarkdown(${jsonForScript(page.body)});</script>
 </div>${ARTICLE_TOC}</div></div>

@@ -92,7 +92,7 @@ function countryLabel(code: string): string {
 export function shouldRecordPageView(c: Context<{ Bindings: Env }>): boolean {
   if (c.req.method !== 'GET' || c.res.status < 200 || c.res.status >= 400) return false
   const path = c.req.path
-  if (path.startsWith('/admin') || path.startsWith('/images/') || EXCLUDED_PATHS.includes(path)) return false
+  if (path.startsWith('/offline/') || path.startsWith('/admin') || path.startsWith('/images/') || EXCLUDED_PATHS.includes(path)) return false
   if (c.req.header('DNT') === '1' || c.req.header('Sec-GPC') === '1') return false
   if (c.req.header('Purpose') === 'prefetch' || c.req.header('Sec-Purpose')?.includes('prefetch')) return false
   return !BOT_PATTERN.test(c.req.header('User-Agent') || '')

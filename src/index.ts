@@ -1,3 +1,4 @@
+import { offlineArchive, offlineVersion, offlineAsset } from './offline/archive'
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, statsPage, searchPage, archivePage, tagsPage, tagPostsPage, DEFAULT_CONFIG, parseNavLinks } from './html'
@@ -13,6 +14,7 @@ import { getPublicStats, recordPageView, shouldRecordPageView } from './analytic
 import { isConfigured } from './config'
 
 export type Env = {
+  VERSION?: { id: string }
   DB: D1Database
   SESSIONS: KVNamespace
   IMAGES: R2Bucket
@@ -135,6 +137,9 @@ app.use('/admin/*', async (c, next) => {
 })
 
 // public
+app.get('/offline/version', async c => { await ensureTagMigration(c.env); return offlineVersion(c) })
+app.get('/offline/archive', async c => { await ensureTagMigration(c.env); return offlineArchive(c) })
+app.get('/offline/:asset', offlineAsset)
 app.get('/images/*', serveImage)
 
 app.get('/', async (c) => {

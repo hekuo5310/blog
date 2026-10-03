@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const { webcrypto } = require('node:crypto');
-const source = fs.readFileSync('src/offline/sw.js', 'utf8');
+const source = fs.readFileSync('src/offline/sw.js.txt', 'utf8');
 function harness(pack) {
   const stores = new Map(); const handlers = {}; let current = pack.version; let offline = false; let failPut = false;
   const network = [];

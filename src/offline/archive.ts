@@ -6,10 +6,10 @@ import { extractImageKeys } from '../images'
 import { DEFAULT_CONFIG, postList, postDetail, pageDetail, archivePage, searchPage, tagsPage, tagPostsPage, termsPage, privacyPage } from '../html'
 import { databaseUtcToIso } from '../time'
 import type { SiteConfig } from '../html'
-import marked from '../../node_modules/marked/lib/marked.umd.js'
-import purify from '../../node_modules/dompurify/dist/purify.min.js'
-import client from './client.js'
-import worker from './sw.js'
+import marked from './marked.umd.js.txt'
+import purify from './purify.min.js.txt'
+import client from './client.js.txt'
+import worker from './sw.js.txt'
 
 export const assets: Record<string, string> = {
   '/offline/marked.js': marked, '/offline/purify.js': purify, '/offline/client.js': client,

@@ -7,7 +7,7 @@ const { gunzipSync } = require('node:zlib');
 const { webcrypto } = require('node:crypto');
 let api;
 before(async () => {
-  const result = await build({ entryPoints: ['src/offline/archive.ts'], bundle: true, platform: 'node', format: 'cjs', write: false, plugins: [{ name: 'text-assets', setup(b) { b.onLoad({ filter: /(?:offline\/(?:sw|client)\.js|marked\.umd\.js|purify\.min\.js)$/ }, args => ({ contents: fs.readFileSync(args.path, 'utf8'), loader: 'text' })); } }] });
+  const result = await build({ entryPoints: ['src/offline/archive.ts'], bundle: true, platform: 'node', format: 'cjs', write: false, loader: { '.txt': 'text' } });
   const module = { exports: {} };
   vm.runInNewContext(result.outputFiles[0].text, { module, exports: module.exports, require, Response, Headers, TextEncoder, Uint8Array, CompressionStream, crypto: webcrypto, btoa, URL, console });
   api = module.exports;

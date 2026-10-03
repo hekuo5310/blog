@@ -85,3 +85,11 @@ test('shared namespace profile key cannot authenticate as a session; real sessio
   const token = 'a'.repeat(64); f.map.set(token, '1'); assert.equal(await auth.validateSession(context(token)), true);
   f.map.set(token, f.map.get('profile')); assert.equal(await auth.validateSession(context(token)), false);
 });
+
+test('dedicated statistics page uses the blog layout and does not require a sync token', async () => {
+  const f = fixture(); delete f.env.SYNC_TOKEN;
+  const response = await app.fetch(new Request('https://blog.test/chatgpt-stats', { headers: { DNT: '1' } }), f.env, { waitUntil() {} });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /ChatGPT Token 统计/); assert.match(html, /id="chatgpt-stats"/); assert.match(html, /href="\/chatgpt-stats"/);
+});

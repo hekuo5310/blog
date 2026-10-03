@@ -327,13 +327,13 @@ npm run dev
 
 ## ChatGPT Token 统计展示
 
-首页第一页的「ChatGPT 使用统计」卡片展示累计 Tokens、单日峰值、最长任务、最长/当前连续天数、最近同步时间、全年逐日热力图及轻量 SVG 累计曲线。沿用博客卡片、CSS 变量和深色模式；移动端只在热力图内部横向滚动。支持 skeleton、空数据、失败重试及超过 24 小时的「统计数据可能尚未同步」提示。页面每分钟更新相对时间，每 5 分钟刷新公开数据。
+独立页面 `/chatgpt-stats` 的「ChatGPT 使用统计」卡片展示累计 Tokens、单日峰值、最长任务、最长/当前连续天数、最近同步时间、全年逐日热力图及轻量 SVG 累计曲线。沿用博客卡片、CSS 变量和深色模式；移动端只在热力图内部横向滚动。支持 skeleton、空数据、失败重试及超过 24 小时的「统计数据可能尚未同步」提示。页面每分钟更新相对时间，每 5 分钟刷新公开数据。
 
 ### 固定接口与同步协议
 
 - `POST /api/chatgpt-stats/update`：`Authorization: Bearer <SYNC_TOKEN>`，`Content-Type: application/json`。
 - `GET /api/chatgpt-stats`：公开读取，`Cache-Control: public, max-age=300`；首次没有记录时返回 JSON `null`。
-- 路由注册在 `src/index.ts`，校验/存储在 `src/chatgpt-stats.ts`，组件在 `src/chatgpt-stats-view.ts`，页面交互在 `src/chatgpt-stats-client.js.txt`，由 `src/html.ts` 接入首页。
+- 路由注册在 `src/index.ts`，校验/存储在 `src/chatgpt-stats.ts`，组件在 `src/chatgpt-stats-view.ts`，页面交互在 `src/chatgpt-stats-client.js.txt`，由 `src/html.ts` 的 `chatgptStatsPage` 接入独立页面；导航栏的「Token 统计」进入该页，首页不展示统计卡片。
 
 POST 完全兼容现有 UserScript 的八个字段，无需重写同步脚本：
 
@@ -400,6 +400,8 @@ Remove-Variable syncToken
 Invoke-RestMethod -Uri 'https://blog.hekuo.workers.dev/api/chatgpt-stats'
 ```
 
-`-MaskInput` 需要 PowerShell 7；Windows PowerShell 5.1 可用 `Read-Host -AsSecureString` 后通过 `[System.Net.NetworkCredential]::new('', $value).Password` 在本地取得字符串。GET 无需登录或 Token。正确 POST 返回 `{ "ok": true, "updatedAt": "..." }`；错误 Token 返回 401；负数、非数组、额外字段返回 400。打开首页核对卡片、热力图 hover、年份切换与曲线。
+`-MaskInput` 需要 PowerShell 7；Windows PowerShell 5.1 可用 `Read-Host -AsSecureString` 后通过 `[System.Net.NetworkCredential]::new('', $value).Password` 在本地取得字符串。GET 无需登录或 Token。正确 POST 返回 `{ "ok": true, "updatedAt": "..." }`；错误 Token 返回 401；负数、非数组、额外字段返回 400。打开 `/chatgpt-stats` 核对卡片、热力图 hover、年份切换与曲线。
 
 验证命令为项目现有 `npm run check`（测试、TypeScript、Wrangler 实际打包及产物启动检查）；没有独立 lint/build 脚本。`jsdom` 仅用于开发测试，不进入博客浏览器运行包。新增回归测试覆盖固定客户端协议、鉴权、字节上限、敏感字段拒绝、KV 故障、会话隔离、格式、365/366 格热力图、SVG、空数据、过期和错误重试状态。
+
+离线整站包包含 `/chatgpt-stats` 的页面外壳；统计 API 始终通过网络读取，断网时页面显示离线提示。

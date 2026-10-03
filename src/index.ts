@@ -2,7 +2,7 @@ import { publicChatGPTStats, updateChatGPTStats } from './chatgpt-stats'
 import { offlineArchive, offlineVersion, offlineAsset } from './offline/archive'
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, statsPage, searchPage, archivePage, tagsPage, tagPostsPage, DEFAULT_CONFIG, parseNavLinks } from './html'
+import { postList, postDetail, loginPage, adminDashboard, postForm, adminPageDashboard, pageDetail, pageForm, settingsPage, termsPage, privacyPage, statsPage, chatgptStatsPage, searchPage, archivePage, tagsPage, tagPostsPage, DEFAULT_CONFIG, parseNavLinks } from './html'
 import type { GiscusConfig, SiteConfig, Post } from './html'
 import { listPages, listPublicPages, getPageBySlug, getPageById, createPage, updatePage, deletePage, togglePagePublish, autosavePage } from './pages'
 import { createSession, verifyCredentials, validateSession, deleteSession, sessionCookie, clearCookie, isLoginRateLimited, recordLoginFailure, clearLoginFailures } from './auth'
@@ -142,6 +142,7 @@ app.use('/admin/*', async (c, next) => {
 // public
 app.post('/api/chatgpt-stats/update', updateChatGPTStats)
 app.get('/api/chatgpt-stats', publicChatGPTStats)
+app.get('/chatgpt-stats', async c => c.html(chatgptStatsPage(await getConfig(c.env))))
 app.get('/offline/version', async c => { await ensureTagMigration(c.env); return offlineVersion(c) })
 app.get('/offline/archive', async c => { await ensureTagMigration(c.env); return offlineArchive(c) })
 app.get('/offline/:asset', offlineAsset)

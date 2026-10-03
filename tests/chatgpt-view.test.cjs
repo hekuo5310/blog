@@ -19,7 +19,7 @@ async function waitFor(check) {
   while (!check()) { if (Date.now() > deadline) throw Error('DOM update timed out'); await new Promise(r => setImmediate(r)); }
 }
 function page(t, fetcher) {
-  const dom = new JSDOM(html.postList([], []), { url: 'https://blog.test/', runScripts: 'outside-only' });
+  const dom = new JSDOM(html.chatgptStatsPage(), { url: 'https://blog.test/chatgpt-stats', runScripts: 'outside-only' });
   const w = dom.window; w.Date.now = () => now;
   w.fetch = fetcher; const calls = [];
   const actual = w.fetch; w.fetch = (...args) => { calls.push(args); return actual(...args); };
@@ -27,7 +27,7 @@ function page(t, fetcher) {
   return { w, d: w.document, calls };
 }
 const value = (d, key) => d.querySelector('[data-chatgpt-field="' + key + '"]').textContent;
-test('home shows skeleton, expected token/duration/relative formats, daily hover and a cumulative SVG', async t => {
+test('dedicated page shows skeleton, expected token/duration/relative formats, daily hover and a cumulative SVG', async t => {
   let resolve; const response = new Promise(r => resolve = r); const { d, w, calls } = page(t, () => response);
   assert.ok(d.querySelector('.chatgpt-loading')); assert.equal(d.getElementById('chatgpt-stats').getAttribute('aria-busy'), 'true');
   resolve(Response.json(payload())); await waitFor(() => d.getElementById('chatgpt-stats').getAttribute('aria-busy') === 'false');
@@ -62,8 +62,10 @@ test('API errors stay within the card and retry restores the stats', async t => 
   error = false; d.getElementById('chatgpt-retry').dispatchEvent(new w.Event('click'));
   await waitFor(() => value(d, 'totalTokens') === '1.42B'); assert.equal(d.getElementById('chatgpt-content').hidden, false);
 });
-test('component reuses theme variables, constrains scroll to its container and only appears on the first home page', () => {
-  const first = html.postList([], []); assert.match(first, /id="chatgpt-stats"/);
+test('component reuses theme variables, constrains scroll to its container and is separate from the homepage', () => {
+  const first = html.chatgptStatsPage(); assert.match(first, /id="chatgpt-stats"/);
+  assert.doesNotMatch(html.postList([], []), /id="chatgpt-stats"/);
+  assert.match(html.postList([], []), /href="\/chatgpt-stats">Token 统计/);
   assert.doesNotMatch(html.postList([], [], undefined, 2, 2), /id="chatgpt-stats"/);
   assert.match(first, /chatgpt-grid-scroll\{overflow-x:auto;max-width:100%/);
   assert.match(first, /chatgpt-stats\{[^}]*var\(--surface\)/);

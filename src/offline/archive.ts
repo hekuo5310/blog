@@ -4,7 +4,7 @@ import type { Env } from '../index'
 import { listPublicPosts, listPublicPostActivities, listPublicTags } from '../posts'
 import { listPublicPages } from '../pages'
 import { extractImageKeys } from '../images'
-import { DEFAULT_CONFIG, postList, postDetail, pageDetail, archivePage, searchPage, tagsPage, tagPostsPage, termsPage, privacyPage } from '../html'
+import { DEFAULT_CONFIG, postList, postDetail, pageDetail, archivePage, searchPage, tagsPage, tagPostsPage, termsPage, privacyPage, chatgptStatsPage } from '../html'
 import { databaseUtcToIso } from '../time'
 import type { SiteConfig } from '../html'
 import marked from './marked.umd.js.txt'
@@ -54,6 +54,7 @@ async function buildArchive(c: Context<{ Bindings: Env }>) {
   }
   for (const post of s.posts) add('/post/' + encodeURIComponent(post.slug), postDetail(post, s.cfg, null))
   for (const page of s.pages) add('/p/' + encodeURIComponent(page.slug), pageDetail(page, s.cfg))
+  add('/chatgpt-stats', chatgptStatsPage(s.cfg))
   add('/archive', archivePage(s.posts, s.cfg))
   add('/search', searchPage('', [], s.cfg))
   // Pre-render search results so arbitrary queries work without a server or remote scripts.

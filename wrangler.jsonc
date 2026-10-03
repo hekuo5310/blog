@@ -4,6 +4,8 @@
   "main": "src/index.ts",
   "compatibility_date": "2024-09-23",
   "keep_vars": true,
+  "version_metadata": { "binding": "VERSION" },
+  "rules": [{ "type": "Text", "globs": ["**/offline/*.js", "**/marked.umd.js", "**/purify.min.js"], "fallthrough": true }],
   "d1_databases": [
     {
       "binding": "DB",

@@ -1,3 +1,4 @@
+import { CHATGPT_STATS_CSS, chatgptStatsCard } from './chatgpt-stats-view'
 import { ARTICLE_LICENSES, CUSTOM_ARTICLE_LICENSE, DEFAULT_ARTICLE_LICENSE, articleLicenseDisplayName, getArticleLicense } from './licenses'
 import { currentUtc8Year, databaseUtcToIso, formatUtc8Date, formatUtc8DateTime } from './time'
 import type { StatItem, StatsReport } from './analytics'
@@ -354,7 +355,7 @@ export function layout(title: string, body: string, adminNav = false, _loggedInU
   document.documentElement.dataset.theme=saved||(systemDark?'dark':'light');
 })();
 (function(){try{if(!/(?:^|;\s*)pv_w=\d+/.test(document.cookie)){document.cookie='pv_w='+window.screen.width+';path=/;max-age=86400'}}catch(e){}})();
-</script>${adminNav ? '<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">' : '<script src="/offline/client.js" defer></script>'}<style>${BASE_CSS}</style></head><body>
+</script>${adminNav ? '<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">' : '<script src="/offline/client.js" defer></script>'}<style>${BASE_CSS}${CHATGPT_STATS_CSS}</style></head><body>
 <nav class="nav"><a href="/" class="nav-logo">${esc(cfg.title)}</a>${rightNav}</nav>
 ${body}
 <div class="update-toast" id="update-toast" role="dialog" aria-live="polite" aria-label="发现新文章">
@@ -983,6 +984,7 @@ export function postList(posts: Post[], activities: PostActivity[], cfg: SiteCon
 
   const body = `<div class="wrap">
 <div class="hero"><h1>${esc(cfg.title)}<span class="cursor"></span></h1><p class="hero-desc">${esc(cfg.desc)}</p></div>
+${page === 1 ? chatgptStatsCard() : ''}
 ${heatmap(activities)}
 <div class="post-list">${items}</div>
 ${pagination(page, totalPages)}

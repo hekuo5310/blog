@@ -324,3 +324,82 @@ npm run dev
 运行 `npm run check` 可执行离线回归测试、TypeScript 检查和 Wrangler 部署打包检查。
 
 离线浏览器脚本使用 `.js.txt` 保存，由 Wrangler 默认 Text 模块规则导入为字符串，再通过 `.js` HTTP 路由提供，避免在 Worker 启动时执行浏览器代码。Marked 18.0.6 与 DOMPurify 3.4.12 的浏览器发行脚本保存在同一目录，保留原版权声明；升级依赖时同步这两份文本资源。`npm run check` 还检查 Wrangler 实际产物并验证服务器启动和四个脚本资源路由。
+
+## ChatGPT Token 统计展示
+
+首页第一页的「ChatGPT 使用统计」卡片展示累计 Tokens、单日峰值、最长任务、最长/当前连续天数、最近同步时间、全年逐日热力图及轻量 SVG 累计曲线。沿用博客卡片、CSS 变量和深色模式；移动端只在热力图内部横向滚动。支持 skeleton、空数据、失败重试及超过 24 小时的「统计数据可能尚未同步」提示。页面每分钟更新相对时间，每 5 分钟刷新公开数据。
+
+### 固定接口与同步协议
+
+- `POST /api/chatgpt-stats/update`：`Authorization: Bearer <SYNC_TOKEN>`，`Content-Type: application/json`。
+- `GET /api/chatgpt-stats`：公开读取，`Cache-Control: public, max-age=300`；首次没有记录时返回 JSON `null`。
+- 路由注册在 `src/index.ts`，校验/存储在 `src/chatgpt-stats.ts`，组件在 `src/chatgpt-stats-view.ts`，页面交互在 `src/chatgpt-stats-client.js.txt`，由 `src/html.ts` 接入首页。
+
+POST 完全兼容现有 UserScript 的八个字段，无需重写同步脚本：
+
+```json
+{
+  "totalTokens": 1415463545,
+  "peakDailyTokens": 125716880,
+  "longestTaskSeconds": 80080,
+  "longestStreakDays": 14,
+  "currentStreakDays": 0,
+  "daily": [{"start_date":"2026-09-30","tokens":53256440,"chat_turns":0}],
+  "weekly": [{"start_date":"2026-09-28","tokens":97597082,"chat_turns":0}],
+  "cumulative": [{"start_date":"2026-09-30","tokens":1415463545,"chat_turns":0}]
+}
+```
+
+数组按实际 Profile 活动记录结构解析：`start_date` 为合法 `YYYY-MM-DD` 日期，`tokens` 为非负有限数，`chat_turns` 为可选非负有限数；累计数组的 `tokens` 已是累计值，不再次求和。数组可为空，每个数组最多 5000 条；拒绝重复日期与未知记录字段。五项数值必须为非负有限 number。未知顶层字段（包括客户端传入的 `updatedAt`）拒绝，输入错误为 400；错误/缺失 Bearer 为 401；超过 256 KiB 请求体为 413；未配置或存储故障为 503。大小限制同时检查声明长度与实际流字节数。
+
+KV 只保存重建后的上述八项数据以及服务器生成的 ISO 8601 `updatedAt`。博客后端不访问 ChatGPT；不存储原始 Profile、Cookie、ChatGPT Authorization、账户/设备 ID 或聊天内容。接口不记录 Authorization 或 POST body；无需 CORS 通配符，现有 `GM_xmlhttpRequest` 可直接发送。
+
+### KV 与 Secret
+
+`wrangler.jsonc` 已增加 `CHATGPT_STATS` 绑定，使用项目原有真实 KV namespace ID `1abb51160d5e47dbb773d8dea1b7313f`，保存键为 `profile`。复用 namespace 不新增存储 abstraction；管理员会话校验已限制为正确令牌格式和精确存储值 `1`，统计记录不会被当成会话。无需新建 KV 即可部署。若希望独立 namespace，可用下列命令创建，再把 `CHATGPT_STATS` 的 `id` 换为命令实际返回的 ID，不改 `SESSIONS`：
+
+```bash
+npx wrangler kv namespace create CHATGPT_STATS
+```
+
+已按项目安装的 Wrangler 4.111.0 帮助确认以下 Secret 命令：
+
+```bash
+npx wrangler secret put SYNC_TOKEN --config wrangler.jsonc
+```
+
+粘贴一个随机生成的高强度 Token，并在现有 UserScript 的 `SYNC_TOKEN` 常量填入完全相同的值。不要将真实 Token 放到 `vars`、README 或 Git。当前开发环境未登录 Cloudflare，Secret 需要由拥有账号登录态的用户设置；代码与 KV 绑定配置已完成。
+
+现有 Worker 域名 `blog.hekuo.workers.dev` 已确认可访问。现有脚本中的 `YOUR_BLOG_DOMAIN`（包括 `@connect`）可填该域名，`WORKER_URL` 填：
+
+```text
+https://blog.hekuo.workers.dev/api/chatgpt-stats/update
+```
+
+若使用自定义域名，也可以把这两处同时改成该 Worker 已绑定的自定义域名。同步间隔、ChatGPT 读取接口和八个 JSON 字段保持不变。公开 GET 为 `https://blog.hekuo.workers.dev/api/chatgpt-stats`。KV 最终一致性与 GET 的 5 分钟浏览器缓存可能让刚同步的数据稍后才显示。
+
+### 测试同步（PowerShell）
+
+先合并并部署，再设置 Secret。以下仅写入合成测试数据；之后现有 UserScript 会覆盖它：
+
+```powershell
+$syncToken = Read-Host '输入与 Worker Secret 相同的 SYNC_TOKEN' -MaskInput
+$payload = @{
+  totalTokens = 1000000
+  peakDailyTokens = 250000
+  longestTaskSeconds = 80080
+  longestStreakDays = 14
+  currentStreakDays = 0
+  daily = @(@{ start_date = '2026-10-03'; tokens = 250000; chat_turns = 0 })
+  weekly = @()
+  cumulative = @(@{ start_date = '2026-10-03'; tokens = 1000000; chat_turns = 0 })
+} | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Method Post -Uri 'https://blog.hekuo.workers.dev/api/chatgpt-stats/update' `
+  -Headers @{ Authorization = "Bearer $syncToken" } -ContentType 'application/json' -Body $payload
+Remove-Variable syncToken
+Invoke-RestMethod -Uri 'https://blog.hekuo.workers.dev/api/chatgpt-stats'
+```
+
+`-MaskInput` 需要 PowerShell 7；Windows PowerShell 5.1 可用 `Read-Host -AsSecureString` 后通过 `[System.Net.NetworkCredential]::new('', $value).Password` 在本地取得字符串。GET 无需登录或 Token。正确 POST 返回 `{ "ok": true, "updatedAt": "..." }`；错误 Token 返回 401；负数、非数组、额外字段返回 400。打开首页核对卡片、热力图 hover、年份切换与曲线。
+
+验证命令为项目现有 `npm run check`（测试、TypeScript、Wrangler 实际打包及产物启动检查）；没有独立 lint/build 脚本。`jsdom` 仅用于开发测试，不进入博客浏览器运行包。新增回归测试覆盖固定客户端协议、鉴权、字节上限、敏感字段拒绝、KV 故障、会话隔离、格式、365/366 格热力图、SVG、空数据、过期和错误重试状态。

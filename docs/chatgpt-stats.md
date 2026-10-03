@@ -1,6 +1,6 @@
 # ChatGPT 使用统计配置指南
 
-这份指南用于当前博客已有的统计功能。继续使用现有 **ChatGPT Profile Stats Sync** Tampermonkey 脚本，不需要换脚本、修改数据协议或新建服务。
+这份指南用于当前博客已有的统计功能。仓库提供完整的 **ChatGPT Profile Stats Sync** Tampermonkey 脚本；已有该脚本的用户可继续使用，无需修改同步协议或新建服务。
 
 配置完成后，从博客导航栏的「Token 统计」进入独立页面：
 
@@ -55,9 +55,166 @@ npx wrangler secret put SYNC_TOKEN --config wrangler.jsonc
 
 这是博客自己的同步密钥，不是 ChatGPT 的 Cookie 或 Authorization。
 
-## 3. 配置现有 Tampermonkey 脚本
+## 3. 安装并配置 Tampermonkey 脚本
 
-在现有脚本中仅修改这些配置：
+没有脚本的用户可以直接使用仓库提供的完整版本：
+
+- [查看完整脚本](../scripts/chatgpt-profile-stats-sync.user.js)
+- [安装脚本（Raw）](https://github.com/hekuo5310/blog/raw/refs/heads/main/scripts/chatgpt-profile-stats-sync.user.js)
+
+先在浏览器安装并启用 Tampermonkey，再打开上面的 Raw 链接并按提示安装。如果没有出现安装界面，可打开「查看完整脚本」，复制全部代码，在 Tampermonkey 控制台选择「添加新脚本」，替换默认内容后保存。若扩展提示需要开启用户脚本权限，按浏览器提示启用。
+
+安装后，在 Tampermonkey 中编辑脚本，将 `REPLACE_WITH_YOUR_SYNC_TOKEN` 替换为第 2 步的 Secret。附带脚本默认同步用户名 `hekuo5310`，发送到本站 `https://www.io.hk.cn/api/chatgpt-stats/update`；其他用户需修改为自己的 ChatGPT 用户名及自己部署的博客地址。不要向他人的博客发送自己的统计或密钥，也不要重复安装多个版本。
+
+脚本沿用原有 Profile 请求、八个 JSON 字段和 30 分钟同步间隔，不会把 ChatGPT Cookie 或 Authorization 发给博客。
+
+完整脚本如下（与仓库中的 `.user.js` 文件一致）：
+
+```javascript
+// ==UserScript==
+// @name         ChatGPT Profile Stats Sync
+// @namespace    https://zerexa.net/
+// @version      1.0.0
+// @description  Sync my ChatGPT token statistics to my blog
+// @match        https://chatgpt.com/*
+// @grant        GM_xmlhttpRequest
+// @connect      www.io.hk.cn
+// @run-at       document-idle
+// ==/UserScript==
+
+(function () {
+  "use strict";
+
+  const USERNAME = "hekuo5310";
+
+  const WORKER_URL =
+    "https://www.io.hk.cn/api/chatgpt-stats/update";
+
+  const SYNC_TOKEN =
+    "REPLACE_WITH_YOUR_SYNC_TOKEN";
+
+  const SYNC_INTERVAL = 30 * 60 * 1000;
+
+  async function sync() {
+    try {
+      const lastSync = Number(
+        localStorage.getItem("zerexa-chatgpt-last-sync") || 0
+      );
+
+      if (Date.now() - lastSync < SYNC_INTERVAL) {
+        return;
+      }
+
+      const response = await fetch(
+        `/backend-api/profiles/${USERNAME}/page?personal=false`,
+        {
+          method: "GET",
+          credentials: "include"
+        }
+      );
+
+      if (!response.ok) {
+        console.error(
+          "[ChatGPT Stats] Profile request failed:",
+          response.status
+        );
+        return;
+      }
+
+      const data = await response.json();
+
+      const page = data?.page;
+      const stats = page?.stats;
+      const agentic = stats?.agentic;
+      const graph = page?.activity_graph;
+
+      if (!agentic) {
+        console.error(
+          "[ChatGPT Stats] Unexpected response:",
+          data
+        );
+        return;
+      }
+
+      const payload = {
+        totalTokens:
+          agentic.lifetime_tokens ?? 0,
+
+        peakDailyTokens:
+          agentic.peak_daily_tokens ?? 0,
+
+        longestTaskSeconds:
+          agentic.longest_running_turn_sec ?? 0,
+
+        longestStreakDays:
+          stats.longest_streak_days ?? 0,
+
+        currentStreakDays:
+          stats.current_streak_days ?? 0,
+
+        daily:
+          graph?.daily_usage_buckets ?? [],
+
+        weekly:
+          graph?.weekly_usage_buckets ?? [],
+
+        cumulative:
+          graph?.cumulative_daily_usage_buckets ?? []
+      };
+
+      GM_xmlhttpRequest({
+        method: "POST",
+        url: WORKER_URL,
+
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SYNC_TOKEN}`
+        },
+
+        data: JSON.stringify(payload),
+
+        onload(res) {
+          if (res.status >= 200 && res.status < 300) {
+            localStorage.setItem(
+              "zerexa-chatgpt-last-sync",
+              String(Date.now())
+            );
+
+            console.log(
+              "[ChatGPT Stats] Synced successfully"
+            );
+          } else {
+            console.error(
+              "[ChatGPT Stats] Upload failed:",
+              res.status,
+              res.responseText
+            );
+          }
+        },
+
+        onerror(error) {
+          console.error(
+            "[ChatGPT Stats] Worker request failed:",
+            error
+          );
+        }
+      });
+
+    } catch (error) {
+      console.error(
+        "[ChatGPT Stats] Sync error:",
+        error
+      );
+    }
+  }
+
+  setTimeout(sync, 5000);
+
+  setInterval(sync, SYNC_INTERVAL);
+})();
+```
+
+脚本中需要核对的配置：
 
 | 位置 | 填写内容 |
 | --- | --- |

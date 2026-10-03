@@ -32,7 +32,7 @@ async function check() {
   return checking;
 }
 function allowed(path) {
-  return /^\/(?:\?page=\d+|post\/[^/?]+|p\/[^/?]+|tag\/[^/?]+(?:\?page=\d+)?|archive|search|tags|terms|privacy|rss\.xml|feed\.xml|updates\.json|images\/[A-Za-z0-9/_\-.]+|offline\/(?:client\.js|marked\.js|purify\.js|search\.json))?$/.test(path) && !path.includes('..');
+  return /^\/(?:\?page=\d+|post\/[^/?]+|p\/[^/?]+|tag\/[^/?]+(?:\?page=\d+)?|archive|search|tags|terms|privacy|chatgpt-stats|rss\.xml|feed\.xml|updates\.json|images\/[A-Za-z0-9/_\-.]+|offline\/(?:client\.js|marked\.js|purify\.js|search\.json))?$/.test(path) && !path.includes('..');
 }
 async function enable() {
   const r = await fetch('/offline/archive', { cache: 'no-store', credentials: 'omit' });

@@ -32,7 +32,7 @@ test('gzip archive contains public pages, local rendering assets, pagination and
   const { c, imageReads } = context(); const response = await api.offlineArchive(c); assert.equal(response.status, 200);
   const pack = JSON.parse(gunzipSync(Buffer.from(await response.arrayBuffer())));
   assert.deepEqual(imageReads, ['public.png']);
-  for (const path of ['/', '/?page=1', '/post/public-post', '/tags', '/tag/Tag', '/tag/Tag?page=1', '/archive', '/search', '/rss.xml', '/images/public.png', '/offline/marked.js', '/offline/purify.js']) assert.ok(pack.entries.some(e => e.path === path), path);
+  for (const path of ['/', '/?page=1', '/chatgpt-stats', '/post/public-post', '/tags', '/tag/Tag', '/tag/Tag?page=1', '/archive', '/search', '/rss.xml', '/images/public.png', '/offline/marked.js', '/offline/purify.js']) assert.ok(pack.entries.some(e => e.path === path), path);
   assert.ok(pack.entries.every(e => !e.path.startsWith('/admin') && e.path !== '/stats'));
   const post = pack.entries.find(e => e.path === '/post/public-post').body;
   assert.match(post, /src="\/offline\/marked.js"/); assert.doesNotMatch(post, /giscus.app\/client.js|quill.snow.css/);

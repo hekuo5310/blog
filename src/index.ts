@@ -1,3 +1,4 @@
+import { publicChatGPTStats, updateChatGPTStats } from './chatgpt-stats'
 import { offlineArchive, offlineVersion, offlineAsset } from './offline/archive'
 import { Hono } from 'hono'
 import type { Context } from 'hono'
@@ -14,6 +15,8 @@ import { getPublicStats, recordPageView, shouldRecordPageView } from './analytic
 import { isConfigured } from './config'
 
 export type Env = {
+  CHATGPT_STATS?: KVNamespace
+  SYNC_TOKEN?: string
   VERSION?: { id: string }
   DB: D1Database
   SESSIONS: KVNamespace
@@ -137,6 +140,8 @@ app.use('/admin/*', async (c, next) => {
 })
 
 // public
+app.post('/api/chatgpt-stats/update', updateChatGPTStats)
+app.get('/api/chatgpt-stats', publicChatGPTStats)
 app.get('/offline/version', async c => { await ensureTagMigration(c.env); return offlineVersion(c) })
 app.get('/offline/archive', async c => { await ensureTagMigration(c.env); return offlineArchive(c) })
 app.get('/offline/:asset', offlineAsset)

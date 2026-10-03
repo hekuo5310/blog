@@ -22,7 +22,7 @@ export function getCookie(req: Request, name: string): string | undefined {
   }
 }
 
-async function hashEqual(left: string, right: string): Promise<boolean> {
+export async function hashEqual(left: string, right: string): Promise<boolean> {
   const encoder = new TextEncoder()
   const [leftDigest, rightDigest] = await Promise.all([
     crypto.subtle.digest('SHA-256', encoder.encode(left)),
@@ -79,9 +79,9 @@ export async function validateSession(c: Context<{ Bindings: Env }>): Promise<bo
   if (!sameOrigin(c)) return false
   const secure = secureRequest(c)
   const token = getCookie(c.req.raw, sessionCookieName(secure))
-  if (!token) return false
+  if (!token || !/^[a-f0-9]{64}$/.test(token)) return false
   const val = await c.env.SESSIONS.get(token)
-  return val !== null
+  return val === '1'
 }
 
 export async function deleteSession(c: Context<{ Bindings: Env }>): Promise<void> {

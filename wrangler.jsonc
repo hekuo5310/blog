@@ -13,6 +13,9 @@
     }
   ],
   "kv_namespaces": [
+    // Reuse the existing namespace with an explicit stats binding; key `profile`
+    // does not collide with session tokens, rate limits, or site:config.
+    { "binding": "CHATGPT_STATS", "id": "1abb51160d5e47dbb773d8dea1b7313f" },
     {
       "binding": "SESSIONS",
       "id": "1abb51160d5e47dbb773d8dea1b7313f"

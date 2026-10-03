@@ -1,0 +1,146 @@
+(function () {
+  'use strict';
+  function compactTokens(n) {
+    if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+    if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(2) + 'K';
+    return n.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+  }
+  function duration(n) {
+    const seconds = Math.floor(n);
+    return Math.floor(seconds / 3600) + 'h ' + Math.floor(seconds % 3600 / 60) + 'm ' + seconds % 60 + 's';
+  }
+  function relativeTime(iso, now) {
+    const age = Math.max(0, now - Date.parse(iso));
+    if (age < 60000) return '刚刚';
+    if (age < 3600000) return Math.floor(age / 60000) + ' 分钟前';
+    if (age < 86400000) return Math.floor(age / 3600000) + ' 小时前';
+    return Math.floor(age / 86400000) + ' 天前';
+  }
+  function tokenLevel(n, max) { return n > 0 && max > 0 ? Math.max(1, Math.min(4, Math.ceil(n / max * 4))) : 0; }
+  function buckets(rows) {
+    if (!Array.isArray(rows)) return [];
+    return rows.filter(row => row && typeof row.start_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.start_date) && Number.isFinite(Date.parse(row.start_date + 'T00:00:00Z')) && typeof row.tokens === 'number' && Number.isFinite(row.tokens) && row.tokens >= 0)
+      .map(row => ({ date: row.start_date, tokens: row.tokens })).sort((a, b) => a.date.localeCompare(b.date));
+  }
+  function yearDays(year) {
+    const days = []; const value = new Date(String(year).padStart(4, '0') + '-01-01T00:00:00Z');
+    while (value.getUTCFullYear() === year) { days.push(value.toISOString().slice(0, 10)); value.setUTCDate(value.getUTCDate() + 1); }
+    return days;
+  }
+  function curvePoints(rows) {
+    if (!rows.length) return [];
+    const first = Date.parse(rows[0].date + 'T00:00:00Z');
+    const last = Date.parse(rows[rows.length - 1].date + 'T00:00:00Z');
+    const max = Math.max(1, ...rows.map(r => r.tokens));
+    return rows.map(r => ({ ...r, x: 60 + (last === first ? 1 : (Date.parse(r.date + 'T00:00:00Z') - first) / (last - first)) * 630, y: 160 - r.tokens / max * 135 }));
+  }
+  const root = document.getElementById('chatgpt-stats');
+  if (!root) return;
+  const status = document.getElementById('chatgpt-status');
+  const content = document.getElementById('chatgpt-content');
+  const retry = document.getElementById('chatgpt-retry');
+  const yearSelect = document.getElementById('chatgpt-year');
+  let current = null; let daily = []; let loading = false;
+  function field(key, value, detail) {
+    root.querySelector('[data-chatgpt-field="' + key + '"]').textContent = value;
+    root.querySelector('[data-chatgpt-detail="' + key + '"]').textContent = detail || '';
+  }
+  function syncTime() {
+    if (!current) return;
+    field('updatedAt', relativeTime(current.updatedAt, Date.now()), new Date(current.updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) + ' UTC+8');
+    const stale = Date.now() - Date.parse(current.updatedAt) > 86400000;
+    status.textContent = stale ? '统计数据可能尚未同步' : '由浏览器同步的使用统计';
+    status.dataset.warning = String(stale);
+  }
+  function renderHeatmap() {
+    const container = document.getElementById('chatgpt-heatmap'); container.replaceChildren();
+    const wrap = document.getElementById('chatgpt-heatmap-wrap'); wrap.hidden = !daily.length;
+    if (!daily.length) return;
+    const year = Number(yearSelect.value);
+    const rows = daily.filter(row => Number(row.date.slice(0, 4)) === year);
+    const values = new Map(rows.map(row => [row.date, row.tokens]));
+    const max = Math.max(0, ...rows.map(row => row.tokens));
+    const dates = yearDays(year);
+    const firstWeekday = new Date(dates[0] + 'T00:00:00Z').getUTCDay();
+    const months = document.createElement('div'); months.className = 'hm-months';
+    for (let month = 1; month <= 12; month++) {
+      const day = dates.findIndex(date => Number(date.slice(5, 7)) === month);
+      const label = document.createElement('span'); label.textContent = month + '月'; label.className = 'hm-month';
+      label.style.gridColumn = String(Math.floor((firstWeekday + day) / 7) + 1); months.append(label);
+    }
+    const grid = document.createElement('div'); grid.className = 'hm-cells';
+    for (let i = 0; i < firstWeekday; i++) { const blank = document.createElement('span'); blank.className = 'hm-cell'; blank.style.visibility = 'hidden'; blank.setAttribute('aria-hidden', 'true'); grid.append(blank); }
+    for (const date of dates) {
+      const tokens = values.get(date) || 0;
+      const cell = document.createElement('button'); cell.type = 'button'; cell.className = 'hm-cell'; cell.dataset.date = date; cell.dataset.l = String(tokenLevel(tokens, max));
+      const label = date + ' · ' + tokens.toLocaleString('zh-CN') + ' Tokens'; cell.title = label; cell.setAttribute('aria-label', label);
+      const select = () => { document.getElementById('chatgpt-selected').textContent = label; };
+      cell.addEventListener('mouseenter', select); cell.addEventListener('focus', select); cell.addEventListener('click', select); grid.append(cell);
+    }
+    container.append(months, grid);
+  }
+  function svgElement(name, attrs, text) {
+    const element = document.createElementNS('http://www.w3.org/2000/svg', name);
+    for (const [key, value] of Object.entries(attrs || {})) element.setAttribute(key, String(value));
+    if (text !== undefined) element.textContent = text;
+    return element;
+  }
+  function renderCurve(rows) {
+    document.getElementById('chatgpt-curve-wrap').hidden = !rows.length;
+    const target = document.getElementById('chatgpt-curve'); target.replaceChildren();
+    if (!rows.length) return;
+    const points = curvePoints(rows);
+    const max = Math.max(1, ...rows.map(row => row.tokens));
+    const svg = svgElement('svg', { viewBox: '0 0 720 195', class: 'chatgpt-curve', role: 'img', 'aria-label': '累计 Token 趋势，从 ' + rows[0].date + ' 到 ' + rows[rows.length - 1].date });
+    svg.append(svgElement('title', {}, '累计 Token 趋势'));
+    svg.append(svgElement('desc', {}, rows[0].date + '：' + compactTokens(rows[0].tokens) + '；' + rows[rows.length - 1].date + '：' + compactTokens(rows[rows.length - 1].tokens)));
+    svg.append(svgElement('line', { x1: 60, y1: 160, x2: 690, y2: 160, class: 'cg-axis' }));
+    svg.append(svgElement('line', { x1: 60, y1: 25, x2: 690, y2: 25, class: 'cg-axis' }));
+    svg.append(svgElement('text', { x: 2, y: 165 }, '0'));
+    svg.append(svgElement('text', { x: 2, y: 29 }, compactTokens(max)));
+    svg.append(svgElement('text', { x: 60, y: 187 }, rows[0].date));
+    svg.append(svgElement('text', { x: 690, y: 187, 'text-anchor': 'end' }, rows[rows.length - 1].date));
+    svg.append(svgElement('polyline', { points: points.map(p => p.x.toFixed(2) + ',' + p.y.toFixed(2)).join(' '), fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' }));
+    for (const point of points) {
+      const dot = svgElement('circle', { cx: point.x, cy: point.y, r: 2, fill: 'currentColor' });
+      dot.append(svgElement('title', {}, point.date + ' · ' + point.tokens.toLocaleString('zh-CN') + ' Tokens')); svg.append(dot);
+    }
+    target.append(svg);
+  }
+  function render(data) {
+    const keys = ['totalTokens', 'peakDailyTokens', 'longestTaskSeconds', 'longestStreakDays', 'currentStreakDays'];
+    if (!data || !keys.every(key => typeof data[key] === 'number' && Number.isFinite(data[key]) && data[key] >= 0) || !Number.isFinite(Date.parse(data.updatedAt))) throw Error('Invalid statistics');
+    current = data;
+    field('totalTokens', compactTokens(data.totalTokens), (data.totalTokens / 1e8).toFixed(2) + ' 亿 · ' + data.totalTokens.toLocaleString('zh-CN'));
+    field('peakDailyTokens', compactTokens(data.peakDailyTokens), data.peakDailyTokens.toLocaleString('zh-CN') + ' Tokens');
+    field('longestTaskSeconds', duration(data.longestTaskSeconds), data.longestTaskSeconds.toLocaleString('zh-CN') + ' 秒');
+    field('longestStreakDays', data.longestStreakDays + ' 天'); field('currentStreakDays', data.currentStreakDays + ' 天'); syncTime();
+    daily = buckets(data.daily);
+    const years = [...new Set(daily.map(row => row.date.slice(0, 4)))].sort().reverse();
+    const selected = yearSelect.value; yearSelect.replaceChildren();
+    for (const year of years) { const option = document.createElement('option'); option.value = year; option.textContent = year; yearSelect.append(option); }
+    if (years.includes(selected)) yearSelect.value = selected;
+    renderHeatmap(); renderCurve(buckets(data.cumulative)); content.hidden = false;
+  }
+  async function load() {
+    if (loading) return; loading = true; retry.hidden = true; root.setAttribute('aria-busy', 'true');
+    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch('/api/chatgpt-stats', { signal: controller.signal, credentials: 'omit' });
+      if (!response.ok) throw Error('Statistics unavailable');
+      const data = await response.json();
+      if (data === null) { current = null; content.hidden = true; status.textContent = '暂无 ChatGPT 使用统计'; status.dataset.warning = 'false'; }
+      else render(data);
+    } catch {
+      status.textContent = navigator.onLine === false ? '当前离线，暂时无法更新 ChatGPT 使用统计' : 'ChatGPT 统计暂时无法加载，请稍后重试';
+      status.dataset.warning = 'true'; retry.hidden = false; if (!current) content.hidden = true;
+    } finally { clearTimeout(timer); loading = false; root.classList.remove('chatgpt-loading'); root.setAttribute('aria-busy', 'false'); }
+  }
+  yearSelect.addEventListener('change', renderHeatmap); retry.addEventListener('click', load);
+  window.addEventListener('online', load);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncTime(); load(); } });
+  setInterval(syncTime, 60000);
+  setInterval(load, 300000);
+  load();
+})();

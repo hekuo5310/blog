@@ -709,7 +709,7 @@ const ARTICLE_TOC_SCRIPT = `<script>
 </script>`
 
 function updateItems(posts: Post[]): UpdateItem[] {
-  return posts.map(p => ({ title: p.title, url: `/post/${encodeURIComponent(p.slug)}`, createdAt: databaseUtcToIso(p.created_at) }))
+  return posts.map(p => ({ title: p.title, url: `/post/${p.slug.split('/').map(encodeURIComponent).join('/')}`, createdAt: databaseUtcToIso(p.created_at) }))
 }
 
 function editorWidget(kind: 'post' | 'page', id: number | null, title: string, body: string): string {
@@ -905,7 +905,7 @@ function eventHtml(item){
     detail+='<p class="hm-change-title"><strong>协议：</strong><del>'+h(changes.license.before)+'</del> → <ins>'+h(changes.license.after)+'</ins></p>';
     if(changes.license.customTextChanged) detail+='<p class="hm-diff-note">自定义协议正文已修改。</p>';
   }
-  return '<article class="hm-event"><div class="hm-event-head"><a class="hm-event-title" href="/post/'+encodeURIComponent(item.post_slug)+'">'+h(item.post_title)+'</a><span class="hm-event-type">'+type+'</span><time class="hm-event-time">'+h(time)+'</time></div>'+detail+'</article>';
+  return '<article class="hm-event"><div class="hm-event-head"><a class="hm-event-title" href="/post/'+item.post_slug.split('/').map(encodeURIComponent).join('/')+'">'+h(item.post_title)+'</a><span class="hm-event-type">'+type+'</span><time class="hm-event-time">'+h(time)+'</time></div>'+detail+'</article>';
 }
 function showDate(key,button){
   document.querySelectorAll('#hm-cells [aria-pressed="true"]').forEach(cell=>cell.setAttribute('aria-pressed','false'));
@@ -978,7 +978,7 @@ export function postList(posts: Post[], activities: PostActivity[], cfg: SiteCon
   const items = posts.length
     ? posts.map(p => `<div class="post-item">
   <div class="post-date">${formatUtc8Date(p.created_at)}</div>
-  <div><a href="/post/${encodeURIComponent(p.slug)}" class="post-title">${esc(p.title)}</a><div class="post-excerpt">${excerpt(p.body)}</div></div>
+  <div><a href="/post/${p.slug.split('/').map(encodeURIComponent).join('/')}" class="post-title">${esc(p.title)}</a><div class="post-excerpt">${excerpt(p.body)}</div></div>
 </div>`).join('')
     : '<p style="color:#aaa;padding:2rem 0">暂无文章</p>'
 
@@ -997,7 +997,7 @@ export function chatgptStatsPage(cfg: SiteConfig = DEFAULT_CONFIG): string {
 
 export function searchPage(query: string, posts: Post[], cfg: SiteConfig = DEFAULT_CONFIG): string {
   const hasQuery = Boolean(query)
-  const items = posts.map(post => `<article class="post-item"><div class="post-date">${formatUtc8Date(post.created_at)}</div><div><a class="search-result-title" href="/post/${encodeURIComponent(post.slug)}">${esc(post.title)}</a><div class="post-excerpt">${excerpt(post.body, 180)}</div></div></article>`).join('')
+  const items = posts.map(post => `<article class="post-item"><div class="post-date">${formatUtc8Date(post.created_at)}</div><div><a class="search-result-title" href="/post/${post.slug.split('/').map(encodeURIComponent).join('/')}">${esc(post.title)}</a><div class="post-excerpt">${excerpt(post.body, 180)}</div></div></article>`).join('')
   const summary = !hasQuery
     ? '输入关键词，搜索标题和正文。'
     : posts.length ? `找到 ${posts.length} 篇与“${esc(query)}”相关的文章。` : `没有找到与“${esc(query)}”相关的文章。`
@@ -1011,7 +1011,7 @@ export function archivePage(posts: Post[], cfg: SiteConfig = DEFAULT_CONFIG): st
     const year = formatUtc8Date(post.created_at).slice(0, 4)
     grouped.set(year, [...(grouped.get(year) || []), post])
   })
-  const sections = [...grouped].map(([year, items]) => `<section><h2 style="font-size:1rem;margin-top:1.5rem">${year}</h2><div class="post-list">${items.map(post => `<article class="post-item"><div class="post-date">${formatUtc8Date(post.created_at)}</div><div><a class="search-result-title" href="/post/${encodeURIComponent(post.slug)}">${esc(post.title)}</a></div></article>`).join('')}</div></section>`).join('')
+  const sections = [...grouped].map(([year, items]) => `<section><h2 style="font-size:1rem;margin-top:1.5rem">${year}</h2><div class="post-list">${items.map(post => `<article class="post-item"><div class="post-date">${formatUtc8Date(post.created_at)}</div><div><a class="search-result-title" href="/post/${post.slug.split('/').map(encodeURIComponent).join('/')}">${esc(post.title)}</a></div></article>`).join('')}</div></section>`).join('')
   return layout('文章归档', `<main class="wrap search-page"><h1>文章归档</h1>${sections || '<p class="search-result-summary">暂无文章。</p>'}</main>`, false, undefined, cfg)
 }
 
@@ -1021,7 +1021,7 @@ export function tagsPage(tags: PublicTag[], cfg: SiteConfig = DEFAULT_CONFIG): s
 }
 
 export function tagPostsPage(tag: string, posts: Post[], count: number, page: number, totalPages: number, cfg: SiteConfig = DEFAULT_CONFIG): string {
-  const items = posts.map(post => `<article class="post-item"><div class="post-date">${formatUtc8Date(post.created_at)}</div><div><a class="search-result-title" href="/post/${encodeURIComponent(post.slug)}">${esc(post.title)}</a><div class="post-excerpt">${excerpt(post.body, 180)}</div></div></article>`).join('')
+  const items = posts.map(post => `<article class="post-item"><div class="post-date">${formatUtc8Date(post.created_at)}</div><div><a class="search-result-title" href="/post/${post.slug.split('/').map(encodeURIComponent).join('/')}">${esc(post.title)}</a><div class="post-excerpt">${excerpt(post.body, 180)}</div></div></article>`).join('')
   const link = (n: number) => `/tag/${encodeURIComponent(tag)}${n > 1 ? `?page=${n}` : ''}`
   const pagination = totalPages > 1 ? `<nav class="pagination" aria-label="标签文章分页">${page > 1 ? `<a href="${link(page - 1)}">上一页</a>` : ''}<span class="page-current" aria-current="page">${page} / ${totalPages}</span>${page < totalPages ? `<a href="${link(page + 1)}">下一页</a>` : ''}</nav>` : ''
   return layout(`# ${tag}`, `<main class="wrap search-page"><h1># ${esc(tag)}</h1><p class="search-result-summary">${count} 篇文章</p><div class="post-list">${items}</div>${pagination}<a href="/tags">查看所有标签</a></main>`, false, undefined, cfg)
@@ -1399,7 +1399,7 @@ export function postForm(post?: Post): string {
 <form method="post" action="${action}" id="pf">
   ${editorWidget('post', post ? post.id : null, post?.title ?? '', post?.body ?? '')}
   <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">文章路径
-    <input class="pf-input" name="slug" maxlength="80" value="${esc(post?.slug ?? '')}" style="margin-top:.35rem" placeholder="留空则根据标题自动生成拼音路径" autocomplete="off">
+    <input class="pf-input" name="slug" maxlength="80" value="${esc(post?.slug ?? '')}" style="margin-top:.35rem" placeholder="支持 notes/20260227/844880；留空自动生成拼音路径" autocomplete="off">
   </label>
   <label style="display:block;margin-top:.75rem;font-size:.85rem;color:var(--muted)">文章协议
     <select class="pf-input" id="article-license" name="license" style="margin-top:.35rem">${licenseOptions}</select>

@@ -77,3 +77,9 @@ test('enable and version checks work with no AbortSignal.timeout global', async 
   const h = harness(makePack()); assert.equal((await h.message('enable')).ok, true);
   assert.ok((await h.message('check')).state);
 });
+
+ test('nested article paths are accepted and served offline', async () => {
+  const pack = makePack(); pack.entries.push({path:'/post/notes/20260227/844880',type:'text/html',body:'NESTED'});
+  const h = harness(pack); assert.equal((await h.message('enable')).ok,true); h.setOffline(true);
+  assert.equal(await (await h.request('/post/notes/20260227/844880',true)).text(),'NESTED');
+});

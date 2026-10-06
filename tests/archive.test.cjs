@@ -55,3 +55,12 @@ test('chunked image Base64 preserves bytes across chunk and padding boundaries',
   const pack = JSON.parse(gunzipSync(Buffer.from(await (await api.offlineArchive(c)).arrayBuffer())));
   assert.equal(pack.entries.find(e => e.path === '/images/public.png').body, Buffer.from(image).toString('base64'));
 });
+
+test('nested slugs retain path separators in archived pages and feeds', async () => {
+  const { c } = context(); const prepare = c.env.DB.prepare;
+  c.env.DB.prepare = sql => { const statement = prepare(sql); return {async all() { const result = await statement.all(); if (/FROM posts/.test(sql) && !/GROUP BY/.test(sql)) result.results.forEach(post => {post.slug = 'notes/20260227/844880';}); return result; }}; };
+  const response = await api.offlineArchive(c); assert.equal(response.status,200);
+  const pack = JSON.parse(gunzipSync(Buffer.from(await response.arrayBuffer())));
+  assert.ok(pack.entries.some(e => e.path === '/post/notes/20260227/844880'));
+  assert.match(pack.entries.find(e => e.path === '/rss.xml').body,/\/post\/notes\/20260227\/844880/);
+});

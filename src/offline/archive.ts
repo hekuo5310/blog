@@ -52,7 +52,7 @@ async function buildArchive(c: Context<{ Bindings: Env }>) {
     add('/?page=' + page, html)
     if (page === 1) add('/', html)
   }
-  for (const post of s.posts) add('/post/' + encodeURIComponent(post.slug), postDetail(post, s.cfg, null))
+  for (const post of s.posts) add('/post/' + post.slug.split('/').map(encodeURIComponent).join('/'), postDetail(post, s.cfg, null))
   for (const page of s.pages) add('/p/' + encodeURIComponent(page.slug), pageDetail(page, s.cfg))
   add('/chatgpt-stats', chatgptStatsPage(s.cfg))
   add('/archive', archivePage(s.posts, s.cfg))
@@ -70,10 +70,10 @@ async function buildArchive(c: Context<{ Bindings: Env }>) {
       if (page === 1) add(path, html)
     }
   }
-  add('/updates.json', JSON.stringify(s.posts.map(p => ({ title: p.title, url: '/post/' + encodeURIComponent(p.slug), createdAt: databaseUtcToIso(p.created_at) }))), 'application/json')
+  add('/updates.json', JSON.stringify(s.posts.map(p => ({ title: p.title, url: '/post/' + p.slug.split('/').map(encodeURIComponent).join('/'), createdAt: databaseUtcToIso(p.created_at) }))), 'application/json')
   const xml = (text: string) => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!)
   const origin = new URL(c.req.url).origin
-  const rss = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>' + xml(s.cfg.title) + '</title><link>' + xml(origin) + '</link>' + s.posts.map(p => '<item><title>' + xml(p.title) + '</title><link>' + xml(origin + '/post/' + encodeURIComponent(p.slug)) + '</link><pubDate>' + new Date(databaseUtcToIso(p.created_at)).toUTCString() + '</pubDate></item>').join('') + '</channel></rss>'
+  const rss = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>' + xml(s.cfg.title) + '</title><link>' + xml(origin) + '</link>' + s.posts.map(p => '<item><title>' + xml(p.title) + '</title><link>' + xml(origin + '/post/' + p.slug.split('/').map(encodeURIComponent).join('/')) + '</link><pubDate>' + new Date(databaseUtcToIso(p.created_at)).toUTCString() + '</pubDate></item>').join('') + '</channel></rss>'
   add('/rss.xml', rss, 'application/rss+xml'); add('/feed.xml', rss, 'application/rss+xml')
   add('/terms', termsPage(s.cfg)); add('/privacy', privacyPage(s.cfg))
   for (const [path, body] of Object.entries(assets)) add(path, body, 'text/javascript; charset=utf-8')

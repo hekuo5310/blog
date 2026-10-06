@@ -126,7 +126,7 @@ async function rssFeed(c: Context<{ Bindings: Env }>) {
   const origin = new URL(c.req.url).origin
   const title = (await getConfig(c.env)).title
   const items = posts.map((post: Post) => {
-    const url = `${origin}/post/${encodeURIComponent(post.slug)}`
+    const url = `${origin}/post/${post.slug.split('/').map(encodeURIComponent).join('/')}`
     return `<item><title>${xmlEscape(post.title)}</title><link>${xmlEscape(url)}</link><guid isPermaLink="true">${xmlEscape(url)}</guid><description>${xmlEscape(rssDescription(post.body))}</description><pubDate>${rssDate(post.created_at)}</pubDate></item>`
   }).join('')
   const feed = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${xmlEscape(title)}</title><link>${xmlEscape(origin)}</link><description>${xmlEscape(title)} RSS 订阅</description><language>zh-CN</language>${items}</channel></rss>`
@@ -160,7 +160,7 @@ app.get('/', async (c) => {
 
 app.get('/updates.json', async (c) => {
   const posts = await listPublicPosts(c)
-  return c.json(posts.map(p => ({ title: p.title, url: `/post/${encodeURIComponent(p.slug)}`, createdAt: databaseUtcToIso(p.created_at) })))
+  return c.json(posts.map(p => ({ title: p.title, url: `/post/${p.slug.split('/').map(encodeURIComponent).join('/')}`, createdAt: databaseUtcToIso(p.created_at) })))
 })
 
 app.get('/rss.xml', rssFeed)
@@ -176,7 +176,7 @@ app.get('/sitemap.xml', async (c) => {
   const origin = new URL(c.req.url).origin
   const urls = [
     { path: '/', lastmod: undefined },
-    ...posts.map(post => ({ path: `/post/${encodeURIComponent(post.slug)}`, lastmod: databaseUtcToIso(post.created_at).slice(0, 10) })),
+    ...posts.map(post => ({ path: `/post/${post.slug.split('/').map(encodeURIComponent).join('/')}`, lastmod: databaseUtcToIso(post.created_at).slice(0, 10) })),
     ...pages.map(page => ({ path: `/p/${encodeURIComponent(page.slug)}`, lastmod: databaseUtcToIso(page.created_at).slice(0, 10) }))
   ]
   const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map(item => `<url><loc>${xmlEscape(`${origin}${item.path}`)}</loc>${item.lastmod ? `<lastmod>${item.lastmod}</lastmod>` : ''}</url>`).join('')}</urlset>`
@@ -228,7 +228,7 @@ app.get('/tag/:tag', async (c) => {
   return c.html(tagPostsPage(tag, posts, count, page, totalPages, cfg))
 })
 
-app.get('/post/:slug', async (c) => {
+app.get('/post/:slug{.+}', async (c) => {
   const post = await getPublishedPostBySlug(c, c.req.param('slug'))
   if (!post) return c.notFound()
   const cfg = await getConfig(c.env)

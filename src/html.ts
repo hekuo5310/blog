@@ -346,8 +346,8 @@ export function layout(title: string, body: string, adminNav = false, _loggedInU
   const themeToggle = `<button class="nav-icon theme-toggle" type="button" id="theme-toggle" aria-label="切换夜间模式" aria-pressed="false" title="切换夜间模式"><span class="theme-icon moon" aria-hidden="true"></span></button>`
   const updateJson = JSON.stringify(updates)
   const rightNav = adminNav
-    ? `<div class="nav-links"><a href="/admin">管理</a><a href="/admin/post/new">新建</a><a href="/admin/settings">设置</a>${themeToggle}<form method="post" action="/admin/logout" style="display:inline"><button class="nav-icon">退出</button></form></div>`
-    : `<div class="nav-links">${extraLinks}<a class="nav-report" href="/search">搜索</a><a class="nav-report" href="/tags">标签</a><a class="nav-report" href="/archive">归档</a><a class="nav-report" href="/stats">访问报表</a><a class="nav-report" href="/chatgpt-stats">Token 统计</a>${subscribeToggle}<button type="button" class="nav-icon" id="offline-toggle" aria-pressed="false">启用离线模式</button>${themeToggle}</div>`
+    ? `<div class="nav-links"><a href="/admin">管理</a><a href="/admin/post/new">新建</a><a href="/admin/todos">待办</a><a href="/admin/settings">设置</a>${themeToggle}<form method="post" action="/admin/logout" style="display:inline"><button class="nav-icon">退出</button></form></div>`
+    : `<div class="nav-links">${extraLinks}<a class="nav-report" href="/todos">待办</a><a class="nav-report" href="/search">搜索</a><a class="nav-report" href="/tags">标签</a><a class="nav-report" href="/archive">归档</a><a class="nav-report" href="/stats">访问报表</a><a class="nav-report" href="/chatgpt-stats">Token 统计</a>${subscribeToggle}<button type="button" class="nav-icon" id="offline-toggle" aria-pressed="false">启用离线模式</button>${themeToggle}</div>`
   return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(cfg.desc)}"><link rel="alternate" type="application/rss+xml" title="${esc(cfg.title)} RSS" href="/rss.xml"><title>${esc(title)} — ${esc(cfg.title)}</title><script>
 (function(){
   var saved=localStorage.getItem('theme');
@@ -592,7 +592,7 @@ function excerpt(md: string, len = 120): string {
   return esc(text.slice(0, len)) + (text.length > len ? '…' : '')
 }
 
-const MARKDOWN_SCRIPT = `<script>
+export const MARKDOWN_SCRIPT = `<script>
 (function(){
   if(window.renderMarkdown)return;
   function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
@@ -1344,7 +1344,7 @@ export function termsPage(cfg: SiteConfig = DEFAULT_CONFIG): string {
 <p>页面结构、站点设计、未单独标注协议的非文章材料、用户内容和第三方内容不因文章协议而自动获得许可，并分别由相应权利人保留权利。任何使用均不得冒充作者、删除必要的权利标识或暗示权利人为相关使用背书。</p>
 <p>开源代码的使用以对应代码仓库中的许可证为准；第三方软件、字体、图像和服务分别受其自身许可证或条款约束。</p>
 <h2>七、第三方服务与链接</h2>
-<p>评论功能由 Giscus 和 GitHub Discussions 提供，页面还可能使用内容分发网络或链接到第三方网站。第三方服务由相应提供者独立运营，并适用其自身条款、隐私政策和可用性安排。我们不控制第三方服务，也不对其内容、安全性、持续可用性或数据处理承担超出适用法律要求的责任。</p>
+<p>文章评论功能由 Giscus 和 GitHub Discussions 提供，待办回复由本站直接存储与展示。页面还可能使用内容分发网络或链接到第三方网站。第三方服务由相应提供者独立运营，并适用其自身条款、隐私政策和可用性安排。我们不控制第三方服务，也不对其内容、安全性、持续可用性或数据处理承担超出适用法律要求的责任。</p>
 <p>第三方链接仅为提供便利，不代表我们认可、担保或与其存在合作关系。访问第三方网站前，请自行核实其内容和政策。</p>
 <h2>八、内容性质与专业建议</h2>
 <p>博客内容主要用于个人记录、技术交流和一般信息分享，可能存在遗漏、错误或过时信息，不构成法律、医疗、财务、投资、安全或其他专业建议。你应结合自身情况独立判断，并在必要时咨询具备资质的专业人士。</p>
@@ -1368,8 +1368,9 @@ export function privacyPage(cfg: SiteConfig = DEFAULT_CONFIG): string {
   return legalPage('隐私协议', `<h2>一、我们收集的信息</h2>
 <p>本站不提供公众账号系统。访问本站时，可能处理 RSS 订阅提醒所需的 Cookie、主题偏好等本地设置、访问请求产生的基础技术日志，以及你通过第三方评论服务主动提交的信息。管理员后台使用的会话仅供站点维护者管理内容，不属于公众用户系统。</p>
 <p>为生成公开的访问报表，本站记录被访问的页面路径、外部来源网站的域名、粗粒度设备类型（桌面设备、手机或平板设备）、访问时间，以及 Cloudflare 根据访问 IP 提供的两位国家或地区代码。本站仅保存该粗粒度代码，不保存 IP 地址、不设置分析 Cookie，也不保存完整 User-Agent。站内来源会归为直接访问，无法识别的地区会归为未知地区，公开报表仅展示汇总结果，不展示单条访问记录。</p>
-<h2>二、第三方评论</h2>
-<p>评论区使用 Giscus。加载和使用评论功能时，GitHub/Giscus 可能按照其隐私政策处理你的 GitHub 账号信息、评论内容、设备与网络信息。</p>
+<h2>二、公开回复与第三方评论</h2>
+<p>待办讨论中提交的昵称、回复正文、回复引用关系和时间会存入本站数据库并公开展示。访客昵称未经身份验证。为限制垃圾回复，服务器临时使用访问 IP 计算加盐摘要，限流有效期为 24 小时，过期记录在后续回复请求时清理；此用途不保存原始 IP，摘要不对外公开。管理员可删除回复或锁定讨论。</p>
+<p>文章评论区使用 Giscus。加载和使用评论功能时，GitHub/Giscus 可能按照其隐私政策处理你的 GitHub 账号信息、评论内容、设备与网络信息。</p>
 <h2>三、信息用途</h2>
 <p>这些信息用于提供 RSS 订阅提醒、保存界面偏好、展示第三方评论、生成访问趋势和热门内容汇总、排查故障、保障网站安全和改进内容体验。</p>
 <h2>四、Cookie</h2>

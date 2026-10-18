@@ -1,3 +1,4 @@
+import { todoRoutes } from './todos'
 import { publicChatGPTStats, updateChatGPTStats } from './chatgpt-stats'
 import { offlineArchive, offlineVersion, offlineAsset } from './offline/archive'
 import { Hono } from 'hono'
@@ -138,6 +139,8 @@ app.use('/admin/*', async (c, next) => {
   if (!await validateSession(c)) return c.redirect('/admin/login')
   return next()
 })
+
+app.route('/', todoRoutes(getConfig))
 
 // public
 app.post('/api/chatgpt-stats/update', updateChatGPTStats)

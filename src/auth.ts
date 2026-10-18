@@ -53,7 +53,7 @@ function sessionCookieName(secure: boolean): string {
   return secure ? SESSION_COOKIE : DEV_SESSION_COOKIE
 }
 
-function sameOrigin(c: Context<{ Bindings: Env }>): boolean {
+export function sameOrigin(c: Context<{ Bindings: Env }>): boolean {
   if (['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) return true
   const target = new URL(c.req.url).origin
   const origin = c.req.header('Origin')

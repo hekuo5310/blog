@@ -1,3 +1,4 @@
+import { giscusReady } from './todo-giscus'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import type { Context } from 'hono'
@@ -73,7 +74,7 @@ export function todoRoutes(config: (env: Env) => Promise<SiteConfig>) {
       c.env.DB.prepare(`SELECT t.*, (SELECT COUNT(*) FROM todo_replies r WHERE r.todo_id=t.id) AS reply_count FROM todo_items t ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY t.updated_at DESC,t.id DESC LIMIT ? OFFSET ?`).bind(...args, pageSize + 1, (p-1)*pageSize).all<Todo>(),
       c.env.DB.prepare('SELECT status,COUNT(*) AS count FROM todo_items GROUP BY status').all<{status: string; count: number}>(), config(c.env)
     ])
-    return c.html(todoList(items.slice(0,pageSize), Object.fromEntries(counts.map(x => [x.status,x.count])), {status,label,q,page:p}, items.length > pageSize, cfg, admin, c.req.path === '/todos'))
+    return c.html(todoList(items.slice(0,pageSize), Object.fromEntries(counts.map(x => [x.status,x.count])), {status,label,q,page:p}, items.length > pageSize, cfg, admin, c.req.path === '/todos', giscusReady(c.env)))
   }
   app.get('/todos', async c => {
     c.header('Cache-Control', 'no-store')
@@ -108,7 +109,7 @@ export function todoRoutes(config: (env: Env) => Promise<SiteConfig>) {
     ])
     const parentId = id(c.req.query('reply'))
     const parent = parentId ? await c.env.DB.prepare('SELECT * FROM todo_replies WHERE id=? AND todo_id=?').bind(parentId,todo.id).first<TodoReply>() : null
-    return c.html(todoDetail(todo,replies.slice(0,50),p,replies.length>50,cfg,admin,c.req.query('sent') === '1' ? '回复已发表。' : '',parent))
+    return c.html(todoDetail(todo,replies.slice(0,50),p,replies.length>50,cfg,admin,c.req.query('sent') === '1' ? '回复已发表。' : '',parent,giscusReady(c.env)))
   })
   app.get('/admin/todos/new', async c => {
     const {results} = await c.env.DB.prepare('SELECT * FROM todo_templates ORDER BY id').all<TodoTemplate>()
@@ -178,6 +179,7 @@ export function todoRoutes(config: (env: Env) => Promise<SiteConfig>) {
     return c.redirect(`/todos/${todo.id}`,303)
   })
   app.post('/todos/:id/replies', async c => {
+    if (giscusReady(c.env)) return c.text('新回复已迁移到 GitHub 讨论，请返回待办页面使用 GitHub 登录。',409)
     c.header('Cache-Control', 'no-store')
     const todo = await get(c); if (!todo) return c.notFound()
     const admin = await validateSession(c)

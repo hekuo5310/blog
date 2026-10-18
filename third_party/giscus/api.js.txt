@@ -1,0 +1,40 @@
+/* SPDX-License-Identifier: MIT
+ * Adapted from giscus/giscus 3d6430237108ca4ee3eb6a1a20595201c09c72d5.
+ * Copyright (c) 2021 Sage M. Abdullah
+ * Copyright (c) 2018 Jeremy Danyow
+ * Copyright (c) 2018 Chris Veness
+ * Full notice: /assets/todo-giscus-LICENSE.txt; sources: third_party/giscus/SOURCES.md.
+ */
+(function () {
+  'use strict';
+  async function json(url, init) {
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(url, { ...init, signal: controller.signal, credentials: 'omit' });
+      const data = await response.json();
+      if (!response.ok || data.errors) {
+        const error = new Error(data.error || data.errors?.[0]?.message || '请求失败，请稍后重试');
+        error.status = response.status; throw error;
+      }
+      return data;
+    } finally { clearTimeout(timer); }
+  }
+  function headers(token) { return { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }; }
+  async function github(query, variables, token) {
+    return json('https://api.github.com/graphql', { method: 'POST', headers: headers(token), body: JSON.stringify({ query, variables }) });
+  }
+  window.BlogGiscusAPI = {
+    load(id, token, after) { return json('/api/todo-giscus/' + id + (after ? '?after=' + encodeURIComponent(after) : ''), { headers: token ? { Authorization: 'Bearer ' + token } : {} }); },
+    token(session) { return json('/api/todo-giscus/token', { method: 'POST', headers: headers(), body: JSON.stringify({ session }) }); },
+    create(id, token) { return json('/api/todo-giscus/' + id, { method: 'POST', headers: headers(token), body: '{}' }); },
+    add(discussionId, body, replyToId, token) {
+      return github('mutation($discussionId:ID!,$body:String!,$replyToId:ID){addDiscussionComment(input:{discussionId:$discussionId,body:$body,replyToId:$replyToId}){comment{id}}}', { discussionId, body, replyToId: replyToId || null }, token);
+    },
+    body(id, token) { return github('query($id:ID!){node(id:$id){... on DiscussionComment{body}}}',{id},token); },
+    edit(commentId, body, token) { return github('mutation($commentId:ID!,$body:String!){updateDiscussionComment(input:{commentId:$commentId,body:$body}){comment{id}}}', {commentId,body},token); },
+    remove(id, token) { return github('mutation($id:ID!){deleteDiscussionComment(input:{id:$id}){clientMutationId}}',{id},token); },
+    reaction(subjectId, content, remove, token) {
+      return github('mutation($subjectId:ID!,$content:ReactionContent!){'+(remove?'removeReaction':'addReaction')+'(input:{subjectId:$subjectId,content:$content}){reaction{id}}}',{subjectId,content},token);
+    }
+  };
+})();

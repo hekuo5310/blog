@@ -421,3 +421,20 @@ Invoke-RestMethod -Uri 'https://blog.hekuo.workers.dev/api/chatgpt-stats'
 - `npm run check` 包含基于真实 SQLite 的权限、模板、筛选、回复、并发限流、锁定、级联删除、输入校验与 XSS/SQL 注入回归验证。
 
 管理员在同一域名登录后台后，前台 `/todos` 自动显示「新建待办」「管理模板」「编辑」入口；新建、编辑与模板管理页面继续使用前台布局。待办详情页可直接切换状态、锁定/解锁讨论、以管理员身份回复和删除留言。权限始终由服务器校验现有会话与同源请求，未登录访客不会获得管理权限。前台管理页面禁止缓存，避免登录状态或操作入口被共享缓存。
+
+
+### Giscus Issues 风格讨论
+
+已配置博客现有 `GISCUS_REPO`、`GISCUS_REPO_ID`、`GISCUS_CATEGORY`、`GISCUS_CATEGORY_ID` 时，待办使用博客原生时间线界面，底层继续使用 Giscus 的授权、讨论查询与创建，以及 GitHub GraphQL 评论/回复/编辑/删除/反应接口。没有嵌入默认 Giscus iframe，也没有部署第二套 Giscus 服务。新建 GitHub App 或额外 GitHub Secret 均不需要。未配置 Giscus 的部署继续保留原生本地回复。
+
+- 访客点击「使用 GitHub 登录」完成 Giscus 授权。博客后台登录只管理待办，不能代替 GitHub 身份；GitHub 操作权限由 GitHub 校验。
+- 评论按 `blog/todos/<固定待办编号>` 严格映射，标题、标签与域名修改不会更换讨论；同一 GitHub 仓库不应给多个博客重复使用相同编号命名空间。
+- Worker 只适配固定的 `giscus.app` 接口和既有配置，拒绝客户端指定仓库/分类/上游地址；写评论与反应直接由浏览器以当前 GitHub 授权访问 GitHub API。
+- GitHub token 仅放在当前页面内存；Giscus 加密会话保存在当前标签页的 sessionStorage。退出 GitHub 会清除本地会话；若需撤销授权，请在 GitHub 的授权应用设置中撤销 Giscus。回调使用一次性随机 state 检查、十分钟有效期、无外部资源，并立即清理 URL。适配接口均禁止缓存，不持久化或记录凭据。
+- 旧 D1 回复保留为只读存档；已启用 Giscus 时拒绝继续向原生回复接口写入，不伪造旧留言的 GitHub 作者。
+- 博客的讨论锁会关闭页面编辑器并阻止通过博客创建讨论；GitHub 上已存在的讨论具有独立权限。若也要禁止直接在 GitHub 发言，请在 GitHub 锁定对应 Discussion，前台会同步识别其锁定状态。
+- GitHub 回复很多时分批加载；嵌套回复超过上游返回数量，可点击原文到 GitHub 查看完整线程。
+
+许可证：Giscus 的 MIT 源码适配位于 `third_party/giscus/api.js.txt`，来源与固定版本见 `third_party/giscus/SOURCES.md`，保留完整上游版权声明。公众可点击讨论区「Giscus MIT 许可证」或访问 `/assets/todo-giscus-LICENSE.txt`。博客原生界面和 Worker 代码沿用项目 Apache-2.0，不把它们冒称为上游 Giscus；未引入 React/Next/SWR 等整套依赖，也未新增 GPL/MPL/AGPL 组件。继续复用博客现有 DOMPurify（使用其 Apache-2.0 许可选项）和 Marked。
+
+回归测试包含固定讨论映射、跨域写入拒绝、授权体积限制、仓库参数注入防护、重复创建前检查、GitHub HTML 消毒、登录回调 state 检查及可访问的 MIT 许可。GitHub OAuth 的最终授权需访客本人在浏览器完成。

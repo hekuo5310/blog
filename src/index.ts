@@ -1,3 +1,4 @@
+import { todoGiscusRoutes } from './todo-giscus'
 import { todoRoutes } from './todos'
 import { publicChatGPTStats, updateChatGPTStats } from './chatgpt-stats'
 import { offlineArchive, offlineVersion, offlineAsset } from './offline/archive'
@@ -68,7 +69,7 @@ app.use('*', async (c, next) => {
   await next()
   c.header('X-Content-Type-Options', 'nosniff')
   c.header('X-Frame-Options', 'SAMEORIGIN')
-  c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+  c.header('Referrer-Policy', c.req.path.startsWith('/api/todo-giscus/') ? 'no-referrer' : 'strict-origin-when-cross-origin')
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
   c.header('Accept-CH', 'Sec-CH-Width')
 })
@@ -140,6 +141,7 @@ app.use('/admin/*', async (c, next) => {
   return next()
 })
 
+app.route('/', todoGiscusRoutes())
 app.route('/', todoRoutes(getConfig))
 
 // public

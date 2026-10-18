@@ -1,0 +1,89 @@
+/* Blog Issues-style interface. Giscus MIT adapter license: /assets/todo-giscus-LICENSE.txt */
+(function () {
+  'use strict';
+  const root = document.getElementById('giscus-discussion'); if (!root) return;
+  const api = window.BlogGiscusAPI, config = JSON.parse(document.getElementById('todo-giscus-config').textContent);
+  const list = root.querySelector('[data-comments]'), status = root.querySelector('[data-status]'), editor = root.querySelector('textarea');
+  const login = root.querySelector('[data-login]'), logout = root.querySelector('[data-logout]'), send = root.querySelector('[data-send]'), more = root.querySelector('[data-more]');
+  const target = root.querySelector('[data-target]'), preview = root.querySelector('[data-preview]');
+  if (!api || !window.DOMPurify) { status.textContent='讨论资源加载失败，请刷新页面重试。'; return; }
+  let token = '', viewer = null, discussion = null, cursor = '', busy = false, replyTo = null, editing = null;
+  const comments = new Map();
+  const e = value => String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  function url(value) { try {const u = new URL(value);return u.protocol==='https:' ? u.href : '#'}catch{return '#'} }
+  function message(text) { status.textContent = text; }
+  function session(value) {try { if (value === null) sessionStorage.removeItem('todo-giscus-session');return sessionStorage.getItem('todo-giscus-session') || '' }catch{return ''} }
+  function controls() {
+    login.hidden=!!token;logout.hidden=!token;logout.textContent=viewer ? '退出 GitHub ('+viewer.login+')' : '退出 GitHub';
+    editor.disabled=!token||config.locked||!!discussion?.locked;send.disabled=busy||editor.disabled;
+    root.querySelector('[data-editor]').hidden=config.locked||!!discussion?.locked;
+  }
+  function clearTarget() {replyTo=null;editing=null;target.textContent='';root.querySelector('[data-cancel]').hidden=true;send.textContent='发表评论'}
+  function selectTarget(text) {target.textContent=text;root.querySelector('[data-cancel]').hidden=false;editor.focus()}
+  function reactions(c) {
+    return ['THUMBS_UP','HEART','HOORAY'].map((kind,index)=>{const r=c.reactions?.[kind]||{};return '<button class="todo-button todo-secondary gc-reaction" data-action="reaction" data-comment="'+e(c.id)+'" data-kind="'+kind+'" aria-pressed="'+!!r.viewerHasReacted+'" '+(!token?'disabled':'')+'>'+['赞同','支持','感谢'][index]+' '+(r.count||0)+'</button>'}).join('');
+  }
+  function comment(c, parent) {
+    comments.set(c.id,{...c,rootId:parent||c.id});
+    const author=c.author||{login:'ghost',url:'https://github.com/ghost'}, date=new Date(c.createdAt);
+    return '<article class="gc-comment '+(parent?'gc-reply':'')+'" id="gc-'+e(c.id)+'"><header class="gc-comment-head"><img loading="lazy" referrerpolicy="no-referrer" width="32" height="32" alt="" src="'+e(url(author.avatarUrl||'https://avatars.githubusercontent.com/u/10137?s=64'))+'"><div><a href="'+e(url(author.url))+'" target="_blank" rel="noopener noreferrer">'+e(author.login)+'</a> <span class="todo-label">GitHub</span><div class="todo-meta"><time datetime="'+e(c.createdAt)+'">'+e(Number.isNaN(date.getTime())?c.createdAt:date.toLocaleString())+'</time>'+(c.lastEditedAt?' · 已编辑':'')+' · <a href="'+e(url(c.url))+'" target="_blank" rel="noopener noreferrer">原文</a></div></div></header><div class="gc-body article-body" data-body="'+e(c.id)+'"></div><footer class="gc-comment-actions">'+reactions(c)+(token&&!config.locked&&!discussion?.locked?'<button class="todo-button todo-secondary" data-action="reply" data-comment="'+e(c.id)+'">回复</button>':'')+(token&&c.viewerDidAuthor?'<button class="todo-button todo-secondary" data-action="edit" data-comment="'+e(c.id)+'">编辑</button><button class="todo-button todo-secondary" data-action="delete" data-comment="'+e(c.id)+'">删除</button>':'')+'</footer>'+(c.replies||[]).map(r=>comment(r,c.id)).join('')+((c.replyCount||0)>(c.replies||[]).length?'<p class="todo-meta">部分较早的嵌套回复请点击原文在 GitHub 查看。</p>':'')+'</article>';
+  }
+  function sanitizeBodies() {
+    list.querySelectorAll('[data-body]').forEach(el=>{const c=comments.get(el.dataset.body);el.innerHTML=c.isMinimized?'此留言已被折叠':window.DOMPurify.sanitize(c.bodyHTML||'',{USE_PROFILES:{html:true}});el.querySelectorAll('a').forEach(a=>{a.rel='noopener noreferrer nofollow';a.target='_blank'})});
+  }
+  async function load(append) {
+    message('正在加载 GitHub 讨论…');more.disabled=true;
+    try {
+      const data=await api.load(config.todoId,token,append?cursor:'');viewer=data.viewer;discussion=data.discussion;
+      if(!append){comments.clear();list.innerHTML=''}
+      if(discussion) {
+        list.insertAdjacentHTML('beforeend',(discussion.comments||[]).map(c=>comment(c)).join(''));sanitizeBodies();
+        cursor=discussion.pageInfo?.endCursor||'';more.hidden=!discussion.pageInfo?.hasNextPage;
+        const link=root.querySelector('[data-github]');link.href=url(discussion.url);link.hidden=false;
+        root.querySelector('[data-count]').textContent=String(discussion.totalCommentCount||0);
+        message(discussion.locked?'GitHub 上的讨论已锁定':config.locked?'此待办已锁定讨论':token?'已登录，可参与讨论':'使用 GitHub 登录后参与讨论');
+      } else {more.hidden=true;message(config.locked?'此待办已锁定讨论':'暂无 GitHub 回复，首次发表评论时会创建独立讨论。')}
+    } catch(error) { if(error.status===401){token='';viewer=null;session(null)}message(error.name==='AbortError'?'加载超时，请点击重试':error.message);root.querySelector('[data-retry]').hidden=false }
+    finally {more.disabled=false;controls()}
+  }
+  login.addEventListener('click',()=>{
+    try {
+      const bytes=crypto.getRandomValues(new Uint8Array(24)),state=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+      sessionStorage.setItem('todo-giscus-pending',JSON.stringify({state,id:String(config.todoId),at:Date.now()}));
+      const callback=new URL('/api/todo-giscus/callback',location.origin);callback.searchParams.set('state',state);
+      location.assign('https://giscus.app/api/oauth/authorize?redirect_uri='+encodeURIComponent(callback.href));
+    }catch{message('浏览器禁止会话存储，无法完成 GitHub 登录。')}
+  });
+  logout.addEventListener('click',()=>{token='';viewer=null;session(null);clearTarget();editor.value='';load(false)});
+  root.querySelector('[data-retry]').addEventListener('click',()=>{root.querySelector('[data-retry]').hidden=true;load(false)});
+  more.addEventListener('click',()=>load(true));
+  root.querySelector('[data-cancel]').addEventListener('click',()=>{clearTarget();editor.value=''});
+  root.querySelector('[data-preview-button]').addEventListener('click',()=>{preview.hidden=!preview.hidden;if(!preview.hidden)preview.innerHTML=window.renderMarkdown(editor.value)});
+  root.querySelector('form').addEventListener('submit',async event=>{
+    event.preventDefault();if(busy||!token||config.locked||discussion?.locked)return;
+    const body=editor.value.trim();if(!body)return message('请填写正文');if(body.length>4000)return message('正文最多 4000 字符');
+    busy=true;controls();message('正在提交…');
+    try {
+      if(editing)await api.edit(editing,body,token);
+      else {const id=discussion?.id||(await api.create(config.todoId,token)).id;await api.add(id,body,replyTo,token)}
+      editor.value='';preview.hidden=true;clearTarget();await load(false);message('已保存到 GitHub Discussions。');
+    }catch(error){message(error.message)}finally{busy=false;controls()}
+  });
+  list.addEventListener('click',async event=>{
+    const button=event.target.closest('button[data-action]');if(!button||!token||busy)return;
+    const c=comments.get(button.dataset.comment);if(!c)return;
+    const action=button.dataset.action;
+    if(action==='reply'){clearTarget();replyTo=c.rootId;selectTarget('回复 @'+c.author.login);return}
+    if(action==='edit'){
+      try {const data=await api.body(c.id,token);clearTarget();editing=c.id;editor.value=data.data.node.body;send.textContent='保存修改';selectTarget('编辑自己的留言')}catch(error){message(error.message)}return;
+    }
+    if(action==='delete'&&!confirm('确认删除这条 GitHub 留言？'))return;
+    busy=true;controls();button.disabled=true;
+    try {if(action==='delete')await api.remove(c.id,token);else if(action==='reaction'){const kind=button.dataset.kind;await api.reaction(c.id,kind,!!c.reactions?.[kind]?.viewerHasReacted,token)}await load(false)}catch(error){message(error.message)}finally{busy=false;controls()}
+  });
+  (async()=>{
+    controls();const saved=session();
+    if(saved){try{token=(await api.token(saved)).token}catch{session(null);message('登录已过期，请重新使用 GitHub 登录')}}
+    await load(false);
+  })();
+})();

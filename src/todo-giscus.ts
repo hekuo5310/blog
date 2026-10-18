@@ -21,8 +21,10 @@ async function bounded(body: ReadableStream<Uint8Array> | null, max: number) {
 async function upstream(path: string, token: string, body?: unknown) {
   const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),10000)
   try {
-    const response=await fetch('https://giscus.app'+path,{method:body===undefined?'GET':'POST',headers:{Accept:'application/json',...(body===undefined?{}:{'Content-Type':'application/json'}),...(token?{Authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:controller.signal,redirect:'error'})
-    return {status:response.status,data:JSON.parse(await bounded(response.body,2*1024*1024)) as Record<string,unknown>}
+    const response=await fetch('https://giscus.app'+path,{method:body===undefined?'GET':'POST',headers:{Accept:'application/json','User-Agent':'blog-giscus-adapter',...(body===undefined?{}:{'Content-Type':'application/json'}),...(token?{Authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:controller.signal,redirect:'manual'})
+    const text=await bounded(response.body,2*1024*1024)
+    try { return {status:response.status,data:JSON.parse(text) as Record<string,unknown>} }
+    catch { return {status:502,data:{error:'上游返回非 JSON 响应',upstreamStatus:response.status}} }
   } finally {clearTimeout(timer)}
 }
 function bearer(c: C) { const h=c.req.header('Authorization')||'';return /^Bearer [\x21-\x7e]{1,2048}$/.test(h)?h.slice(7):'' }
@@ -30,7 +32,7 @@ const callback = `<!doctype html><html lang="zh"><meta charset="utf-8"><meta nam
 (function(){var q=new URLSearchParams(location.search);history.replaceState(null,'','/api/todo-giscus/callback');try{var state=q.get('state'),pending=JSON.parse(sessionStorage.getItem('todo-giscus-pending')||'null');sessionStorage.removeItem('todo-giscus-pending');if(!pending||state!==pending.state||Date.now()-pending.at>600000||!/^\\d+$/.test(pending.id))throw Error('授权状态失效，请返回待办重新登录。');var session=q.get('giscus');if(!session||session.length>16000)throw Error('授权未完成，请返回待办重试。');sessionStorage.setItem('todo-giscus-session',session);location.replace('/todos/'+pending.id+'#giscus-discussion');}catch(e){document.getElementById('status').textContent=e.message;}})();</script></html>`
 export function todoGiscusRoutes() {
   const app=new Hono<{Bindings:Env}>()
-  app.onError((_error,c)=>c.json({error:'讨论服务暂不可用，请稍后重试'},503))
+  app.onError((error,c)=>c.json({error:'讨论服务暂不可用，请稍后重试',reason:error.name==='AbortError'?'timeout':'network'},503))
   app.get('/assets/todo-giscus-api.js',c=>c.body(api,200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'public, max-age=300'}))
   app.get('/assets/todo-giscus-client.js',c=>c.body(client,200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'public, max-age=300'}))
   app.get('/assets/todo-giscus-LICENSE.txt',c=>c.text(license))
@@ -60,7 +62,7 @@ export function todoGiscusRoutes() {
     const query=new URLSearchParams({repo:c.env.GISCUS_REPO||'hekuo5310/blog',category:c.env.GISCUS_CATEGORY!,term:'blog/todos/'+todo.id,strict:'true',first:'20',...(after?{after}:{})})
     const r=await upstream('/api/discussions?'+query,bearer(c))
     if(r.status===404)return c.json({discussion:null,viewer:null})
-    if(r.status!==200)return c.json({error:r.status===403?'GitHub 登录已失效，请重新登录':'讨论加载失败，请稍后重试'},r.status===403?401:r.status===429?429:503)
+    if(r.status!==200)return c.json({error:r.status===403?'GitHub 登录已失效，请重新登录':'讨论加载失败，请稍后重试',...(r.data.upstreamStatus?{upstreamStatus:r.data.upstreamStatus}:{})},r.status===403?401:r.status===429?429:503)
     return c.json(r.data)
   })
   app.post('/api/todo-giscus/:id',async c=>{

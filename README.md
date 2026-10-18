@@ -419,3 +419,5 @@ Invoke-RestMethod -Uri 'https://blog.hekuo.workers.dev/api/chatgpt-stats'
 - 数据保存在现有 D1 `DB`，迁移为 `migrations/0013_todos.sql`；无新增服务、binding 或依赖。部署前执行 `npm run db:migrations:apply`；`npm run deploy` 已包含该步骤。Cloudflare 构建若使用 `npx wrangler versions upload`，需先将迁移命令加入构建步骤，否则新表尚未创建。
 - 待办与回复是动态在线内容，不写入离线整站包。
 - `npm run check` 包含基于真实 SQLite 的权限、模板、筛选、回复、并发限流、锁定、级联删除、输入校验与 XSS/SQL 注入回归验证。
+
+管理员在同一域名登录后台后，前台 `/todos` 自动显示「新建待办」「管理模板」「编辑」入口；新建、编辑与模板管理页面继续使用前台布局。待办详情页可直接切换状态、锁定/解锁讨论、以管理员身份回复和删除留言。权限始终由服务器校验现有会话与同源请求，未登录访客不会获得管理权限。前台管理页面禁止缓存，避免登录状态或操作入口被共享缓存。

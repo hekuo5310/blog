@@ -73,10 +73,32 @@ export function todoRoutes(config: (env: Env) => Promise<SiteConfig>) {
       c.env.DB.prepare(`SELECT t.*, (SELECT COUNT(*) FROM todo_replies r WHERE r.todo_id=t.id) AS reply_count FROM todo_items t ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY t.updated_at DESC,t.id DESC LIMIT ? OFFSET ?`).bind(...args, pageSize + 1, (p-1)*pageSize).all<Todo>(),
       c.env.DB.prepare('SELECT status,COUNT(*) AS count FROM todo_items GROUP BY status').all<{status: string; count: number}>(), config(c.env)
     ])
-    return c.html(todoList(items.slice(0,pageSize), Object.fromEntries(counts.map(x => [x.status,x.count])), {status,label,q,page:p}, items.length > pageSize, cfg, admin))
+    return c.html(todoList(items.slice(0,pageSize), Object.fromEntries(counts.map(x => [x.status,x.count])), {status,label,q,page:p}, items.length > pageSize, cfg, admin, c.req.path === '/todos'))
   }
-  app.get('/todos', c => list(c,false))
+  app.get('/todos', async c => {
+    c.header('Cache-Control', 'no-store')
+    return list(c, await validateSession(c))
+  })
   app.get('/admin/todos', c => list(c,true))
+  app.get('/todos/new', async c => {
+    c.header('Cache-Control','no-store')
+    if (!await validateSession(c)) return c.redirect('/admin/login')
+    const {results} = await c.env.DB.prepare('SELECT * FROM todo_templates ORDER BY id').all<TodoTemplate>()
+    const selected = results.find(t => t.id === id(c.req.query('template')))
+    return c.html(todoForm(selected ? {...selected,status:'open',locked:0} : null,results,await config(c.env),true,true))
+  })
+  app.get('/todos/templates', async c => {
+    c.header('Cache-Control','no-store')
+    if (!await validateSession(c)) return c.redirect('/admin/login')
+    const {results} = await c.env.DB.prepare('SELECT * FROM todo_templates ORDER BY id').all<TodoTemplate>()
+    return c.html(templatesPage(results,await config(c.env),true))
+  })
+  app.get('/todos/:id/edit', async c => {
+    c.header('Cache-Control','no-store')
+    if (!await validateSession(c)) return c.redirect('/admin/login')
+    const todo = await get(c); if (!todo) return c.notFound()
+    return c.html(todoForm(todo,[],await config(c.env),false,true))
+  })
   app.get('/todos/:id', async c => {
     const todo = await get(c); if (!todo) return c.notFound()
     c.header('Cache-Control', 'no-store')
@@ -112,14 +134,15 @@ export function todoRoutes(config: (env: Env) => Promise<SiteConfig>) {
       const r = await c.env.DB.prepare('UPDATE todo_templates SET name=?,title=?,body=?,labels=? WHERE id=?').bind(name,title,body,JSON.stringify(labels),key).run()
       if (!r.meta.changes) return c.notFound()
     } else await c.env.DB.prepare('INSERT INTO todo_templates(name,title,body,labels) VALUES (?,?,?,?)').bind(name,title,body,JSON.stringify(labels)).run()
-    return c.redirect('/admin/todos/templates',303)
+    return c.redirect(f?.get('frontend') === '1' ? '/todos/templates' : '/admin/todos/templates',303)
   }
   app.post('/admin/todos/templates', c => saveTemplate(c,false))
   app.post('/admin/todos/templates/:id', c => saveTemplate(c,true))
   app.post('/admin/todos/templates/:id/delete', async c => {
     const key = id(c.req.param('id')); if (!key) return c.notFound()
+    const f = await form(c)
     await c.env.DB.prepare('DELETE FROM todo_templates WHERE id=?').bind(key).run()
-    return c.redirect('/admin/todos/templates',303)
+    return c.redirect(f?.get('frontend') === '1' ? '/todos/templates' : '/admin/todos/templates',303)
   })
   app.get('/admin/todos/:id/edit', async c => {
     const todo = await get(c); if (!todo) return c.notFound()
@@ -132,10 +155,22 @@ export function todoRoutes(config: (env: Env) => Promise<SiteConfig>) {
     await c.env.DB.prepare("UPDATE todo_items SET title=?,body=?,labels=?,status=?,locked=?,updated_at=datetime('now') WHERE id=?").bind(values.title,values.body,values.labels,values.status,values.locked,todo.id).run()
     return c.redirect(`/todos/${todo.id}`,303)
   })
+  app.post('/admin/todos/:id/state', async c => {
+    const todo = await get(c); if (!todo) return c.notFound()
+    const f = await form(c); if (!f) return invalid(c)
+    const status = f.get('status'), locked = f.get('locked')
+    if (status !== null && Object.hasOwn(states,status) && locked === null) {
+      await c.env.DB.prepare("UPDATE todo_items SET status=?,updated_at=datetime('now') WHERE id=?").bind(status,todo.id).run()
+    } else if (status === null && (locked === '0' || locked === '1')) {
+      await c.env.DB.prepare("UPDATE todo_items SET locked=?,updated_at=datetime('now') WHERE id=?").bind(Number(locked),todo.id).run()
+    } else return invalid(c)
+    return c.redirect(`/todos/${todo.id}`,303)
+  })
   app.post('/admin/todos/:id/delete', async c => {
     const todo = await get(c); if (!todo) return c.notFound()
+    const f = await form(c)
     await c.env.DB.batch([c.env.DB.prepare('DELETE FROM todo_replies WHERE todo_id=?').bind(todo.id),c.env.DB.prepare('DELETE FROM todo_items WHERE id=?').bind(todo.id)])
-    return c.redirect('/admin/todos',303)
+    return c.redirect(f?.get('frontend') === '1' ? '/todos' : '/admin/todos',303)
   })
   app.post('/admin/todos/:id/replies/:replyId/delete', async c => {
     const todo = await get(c), key = id(c.req.param('replyId')); if (!todo || !key) return c.notFound()

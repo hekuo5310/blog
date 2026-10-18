@@ -108,3 +108,32 @@ test('public lists and replies paginate, parent deletion preserves replies, Mark
   const body=dom.window.document.querySelector('.todo-markdown');assert.equal(body.querySelector('h2').textContent,'Heading');assert.equal(body.querySelector('script'),null);assert.equal(body.querySelector('[onerror]'),null);assert.equal(body.querySelector('a[href^="javascript:"]'),null);
   assert.match(first,/var\(--bg\)/);assert.match(first,/@media\(max-width:600px\)/);dom.window.close();
 });
+test('frontend detects admin session and exposes frontend management pages without leaking controls to visitors',async()=>{
+  const f=fixture(),key=await f.create();
+  const publicList=await f.send('/todos'),adminList=await f.send('/todos',{admin:true});
+  assert.equal(adminList.headers.get('Cache-Control'),'no-store');
+  const guest=await publicList.text(),admin=await adminList.text();
+  assert.doesNotMatch(guest,/href="\/todos\/new"/);assert.doesNotMatch(guest,/href="\/todos\/\d+\/edit"/);
+  assert.match(admin,/href="\/todos\/new"/);assert.match(admin,/href="\/todos\/templates"/);assert.match(admin,new RegExp('href="/todos/'+key+'/edit"'));
+  for(const path of ['/todos/new','/todos/templates',`/todos/${key}/edit`]) {
+    assert.equal((await f.send(path)).status,302);
+    const r=await f.send(path,{admin:true});assert.equal(r.status,200);assert.equal(r.headers.get('Cache-Control'),'no-store');assert.match(await r.text(),/class="nav-report" href="\/todos"/);
+  }
+  const detail=await (await f.send(`/todos/${key}`,{admin:true})).text();assert.match(detail,/设为已完成/);assert.match(detail,/锁定讨论/);
+  assert.doesNotMatch(await (await f.send(`/todos/${key}`)).text(),/aria-label="管理员操作"/);
+});
+test('frontend state actions are authenticated, CSRF protected and redirect back to the detail',async()=>{
+  const f=fixture(),key=await f.create(),path=`/admin/todos/${key}/state`;
+  assert.equal((await f.send(path,{method:'POST',data:{status:'closed'}})).status,302);
+  assert.equal((await f.send(path,{method:'POST',admin:true,origin:'https://evil.test',data:{status:'closed'}})).status,302);
+  for(const data of [{status:'closed'},{status:'in_progress'},{status:'open'},{locked:'1'},{locked:'0'}]) {
+    const r=await f.send(path,{method:'POST',admin:true,data});assert.equal(r.status,303);assert.equal(r.headers.get('Location'),`/todos/${key}`);
+    const row=f.db.prepare('SELECT * FROM todo_items WHERE id=?').get(key);if(data.status)assert.equal(row.status,data.status);if(data.locked)assert.equal(row.locked,Number(data.locked));
+  }
+  assert.equal((await f.send(path,{method:'POST',admin:true,data:{status:'bad'}})).status,400);
+  assert.equal((await f.send(path,{method:'POST',admin:true,data:{status:'closed',locked:'1'}})).status,400);
+  const save=await f.send('/admin/todos/templates',{method:'POST',admin:true,data:{name:'Front',title:'',body:'Details',frontend:'1'}});assert.equal(save.headers.get('Location'),'/todos/templates');
+  const t=f.db.prepare('SELECT id FROM todo_templates ORDER BY id DESC').get();
+  const del=await f.send(`/admin/todos/templates/${t.id}/delete`,{method:'POST',admin:true,data:{frontend:'1'}});assert.equal(del.headers.get('Location'),'/todos/templates');
+  const deletion=await f.send(`/admin/todos/${key}/delete`,{method:'POST',admin:true,data:{frontend:'1'}});assert.equal(deletion.headers.get('Location'),'/todos');
+});

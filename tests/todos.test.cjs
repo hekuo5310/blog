@@ -22,6 +22,44 @@ function fixture() {
   const create=async (over={})=>{const r=await send('/admin/todos',{method:'POST',admin:true,data:{title:'A plan',body:'## Goal\n\n- [ ] Task',labels:'功能, 优先处理',status:'open',...over}});assert.equal(r.status,303);return Number(r.headers.get('Location').split('/').pop())};
   return {db,env,send,create};
 }
+test('task checkboxes save both ways, reject visitors, stale edits and non-task text',async()=>{
+  const f=fixture();
+  const body='```md\n- [ ] code\n```\n\n- [ ] parent\n  - [x] child\n\n> - [ ] quoted\n\nordinary [ ] text';
+  const key=await f.create({body});
+  const path=`/admin/todos/${key}/tasks`;
+  const offset=body.indexOf('[ ] parent')+1;
+  const data={body,offset:String(offset),checked:'1'};
+  assert.equal((await f.send(path,{method:'POST',data})).status,302);
+  assert.equal((await f.send(path,{method:'POST',admin:true,origin:'https://evil.test',data})).status,302);
+  for(const badOffset of [body.indexOf('[ ] code')+1,body.indexOf('[ ] text')+1,offset+2]) {
+    assert.equal((await f.send(path,{method:'POST',admin:true,data:{...data,offset:String(badOffset)}})).status,400);
+  }
+  assert.equal((await f.send(path,{method:'POST',admin:true,data})).status,200);
+  const changed=body.slice(0,offset)+'x'+body.slice(offset+1);
+  assert.equal(f.db.prepare('SELECT body FROM todo_items WHERE id=?').get(key).body,changed);
+  assert.equal((await f.send(path,{method:'POST',admin:true,data})).status,409);
+  assert.equal((await f.send(path,{method:'POST',admin:true,data:{body:changed,offset:String(offset),checked:'0'}})).status,200);
+  assert.equal(f.db.prepare('SELECT body FROM todo_items WHERE id=?').get(key).body,body);
+  assert.doesNotMatch(await (await f.send(`/todos/${key}`)).text(),/id="todo-task-config"/);
+  const html=await (await f.send(`/todos/${key}`,{admin:true})).text();
+  const dom=new JSDOM(html,{runScripts:'outside-only'}), w=dom.window;
+  for(const file of ['src/offline/marked.umd.js.txt','src/offline/purify.min.js.txt']) w.eval(fs.readFileSync(file,'utf8'));
+  for(const script of w.document.querySelectorAll('script:not([src]):not([type])')) {
+    if(script.textContent.includes('if(window.renderMarkdown)return') || script.textContent.startsWith("document.querySelectorAll('.todo-markdown')")) w.eval(script.textContent);
+  }
+  const calls=[]; w.fetch=async(url,options)=>{calls.push({url,options});return new Response('{}',{status:calls.length===2?409:200})};
+  w.eval(fs.readFileSync('src/todo-tasks-client.js.txt','utf8'));
+  const inputs=[...w.document.querySelectorAll('#todo-task-body input[type=checkbox]')];
+  assert.equal(inputs.length,3,w.document.querySelector('#todo-task-body').innerHTML);assert.ok(inputs.every(x=>!x.disabled));assert.equal(inputs[1].checked,true);
+  assert.doesNotMatch(w.document.querySelector('#todo-task-body').textContent,/BLOGTASKCONTROL/);
+  inputs[0].checked=true;inputs[0].dispatchEvent(new w.Event('change'));await new Promise(r=>setImmediate(r));
+  assert.equal(calls[0].options.body.get('offset'),String(offset));assert.equal(inputs[0].checked,true);
+  inputs[0].checked=false;inputs[0].dispatchEvent(new w.Event('change'));await new Promise(r=>setImmediate(r));
+  assert.equal(calls[1].options.body.get('body'),changed);assert.equal(inputs[0].checked,true);
+  assert.match(w.document.getElementById('todo-task-status').textContent,/刷新/);
+  dom.window.close();
+  assert.equal((await f.send('/admin/todos',{admin:true})).headers.get('Location'),'/todos');
+});
 test('only admin can create/edit/delete todos or templates; cross-origin writes are rejected',async()=>{
   const f=fixture();
   for(const path of ['/admin/todos','/admin/todos/templates','/admin/todos/1','/admin/todos/1/delete','/admin/todos/templates/1/delete']) {

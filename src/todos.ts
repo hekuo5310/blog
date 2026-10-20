@@ -5,6 +5,8 @@ import type { Context } from 'hono'
 import type { Env } from './index'
 import type { SiteConfig } from './html'
 import { validateSession } from './auth'
+import { todoTasks } from './todo-tasks'
+import taskClient from './todo-tasks-client.js.txt'
 import { todoList, todoDetail, todoForm, templatesPage, todoLayout, states } from './todos-view'
 
 export type Todo = { id: number; title: string; body: string; labels: string; status: string; locked: number; created_at: string; updated_at: string; reply_count?: number }
@@ -37,6 +39,7 @@ function itemValues(f: URLSearchParams) {
 }
 export function todoRoutes(config: (env: Env) => Promise<SiteConfig>) {
   const app = new Hono<{ Bindings: Env }>()
+  app.get('/assets/todo-tasks.js', c => c.body(taskClient,200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'public, max-age=300'}))
   const limit = bodyLimit({ maxSize: 96 * 1024, onError: c => c.text('请求内容过长', 413) })
   const limited = async (c: C, next: () => Promise<void>) => {
     // Always count the stream, including a forged or missing Content-Length.
@@ -80,7 +83,7 @@ export function todoRoutes(config: (env: Env) => Promise<SiteConfig>) {
     c.header('Cache-Control', 'no-store')
     return list(c, await validateSession(c))
   })
-  app.get('/admin/todos', c => list(c,true))
+  app.get('/admin/todos', c => c.redirect('/todos',302))
   app.get('/todos/new', async c => {
     c.header('Cache-Control','no-store')
     if (!await validateSession(c)) return c.redirect('/admin/login')
@@ -166,6 +169,20 @@ export function todoRoutes(config: (env: Env) => Promise<SiteConfig>) {
       await c.env.DB.prepare("UPDATE todo_items SET locked=?,updated_at=datetime('now') WHERE id=?").bind(Number(locked),todo.id).run()
     } else return invalid(c)
     return c.redirect(`/todos/${todo.id}`,303)
+  })
+  app.post('/admin/todos/:id/tasks', async c => {
+    c.header('Cache-Control','no-store')
+    const todo = await get(c); if (!todo) return c.notFound()
+    const f = await form(c)
+    const original = f?.get('body'), rawOffset = f?.get('offset') || '', checked = f?.get('checked')
+    if (typeof original !== 'string' || original.length > 16000 || !/^\d{1,5}$/.test(rawOffset) || (checked !== '0' && checked !== '1')) return c.text('任务参数无效',400)
+    if (original !== todo.body) return c.text('正文已更新，请刷新后重试',409)
+    const offset = Number(rawOffset)
+    if (!todoTasks(original).includes(offset)) return c.text('不是有效的任务复选框',400)
+    const body = original.slice(0,offset) + (checked === '1' ? 'x' : ' ') + original.slice(offset+1)
+    const result = await c.env.DB.prepare("UPDATE todo_items SET body=?,updated_at=datetime('now') WHERE id=? AND body=?").bind(body,todo.id,original).run()
+    if (!result.meta.changes) return c.text('正文已更新，请刷新后重试',409)
+    return c.json({ok:true})
   })
   app.post('/admin/todos/:id/delete', async c => {
     const todo = await get(c); if (!todo) return c.notFound()

@@ -1,0 +1,48 @@
+(function () {
+  var root = document.getElementById('todo-task-body');
+  var config = document.getElementById('todo-task-config');
+  if (!root || !config) return;
+  var data = JSON.parse(config.textContent), body = data.body, busy = false;
+  var status = document.getElementById('todo-task-status');
+  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes = [], node;
+  while ((node = walker.nextNode())) nodes.push(node);
+  var controls = [];
+  nodes.forEach(function (text) {
+    var pattern = new RegExp(data.prefix + '(\\d+)END ', 'g');
+    var matches = Array.from(text.textContent.matchAll(pattern));
+    if (!matches.length) return;
+    var li = text.parentElement.closest('li');
+    var input = li && li.querySelector('input[type=checkbox]');
+    text.textContent = text.textContent.replace(pattern, '');
+    if (!input || matches.length !== 1) return;
+    var offset = Number(matches[0][1]);
+    if (!data.offsets.includes(offset) || controls.some(function (c) { return c.input === input; })) return;
+    input.disabled = false;
+    input.setAttribute('aria-label', '切换任务完成状态');
+    input.style.cursor = 'pointer';
+    controls.push({input:input, offset:offset});
+    input.addEventListener('change', async function () {
+      var old = body[offset].toLowerCase() === 'x', checked = input.checked;
+      if (busy) { input.checked = old; return; }
+      busy = true; controls.forEach(function (c) { c.input.disabled = true; });
+      status.textContent = '正在保存任务状态…';
+      var controller = new AbortController(), timer = setTimeout(function () { controller.abort(); },15000);
+      try {
+        var response = await fetch('/admin/todos/' + data.id + '/tasks', {
+          method:'POST', credentials:'same-origin', redirect:'error', signal:controller.signal,
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:new URLSearchParams({body:body,offset:String(offset),checked:checked?'1':'0'})
+        });
+        if (!response.ok) throw new Error(response.status === 409 ? '正文已更新，请刷新页面后重试。' : '保存失败，请确认管理员仍已登录后重试。');
+        body = body.slice(0,offset) + (checked?'x':' ') + body.slice(offset+1);
+        status.textContent = '任务状态已保存';
+      } catch (error) {
+        input.checked = old;
+        status.textContent = error.message || '保存失败，请重试。';
+      } finally {
+        clearTimeout(timer);
+        busy = false; controls.forEach(function (c) { c.input.disabled = false; });
+      }
+    });
+  });
+})();

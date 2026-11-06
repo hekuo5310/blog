@@ -1,5 +1,6 @@
 import { CHATGPT_STATS_CSS, chatgptStatsCard } from './chatgpt-stats-view'
 import { friendLinksContent, FRIEND_LINKS_SCRIPT } from './friend-links'
+import { SITE_ICON } from './site-icon'
 import { ARTICLE_LICENSES, CUSTOM_ARTICLE_LICENSE, DEFAULT_ARTICLE_LICENSE, articleLicenseDisplayName, getArticleLicense } from './licenses'
 import { currentUtc8Year, databaseUtcToIso, formatUtc8Date, formatUtc8DateTime } from './time'
 import type { StatItem, StatsReport } from './analytics'
@@ -349,7 +350,7 @@ export function layout(title: string, body: string, adminNav = false, _loggedInU
   const rightNav = adminNav
     ? `<div class="nav-links"><a href="/admin">管理</a><a href="/admin/post/new">新建</a><a href="/todos">待办</a><a href="/admin/friend-links">友链</a><a href="/admin/settings">设置</a>${themeToggle}<form method="post" action="/admin/logout" style="display:inline"><button class="nav-icon">退出</button></form></div>`
     : `<div class="nav-links">${extraLinks}<a class="nav-report" href="/todos">待办</a><a class="nav-report" href="/search">搜索</a><a class="nav-report" href="/tags">标签</a><a class="nav-report" href="/archive">归档</a><a class="nav-report" href="/stats">访问报表</a><a class="nav-report" href="/chatgpt-stats">Token 统计</a>${subscribeToggle}<button type="button" class="nav-icon" id="offline-toggle" aria-pressed="false">启用离线模式</button>${themeToggle}</div>`
-  return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(cfg.desc)}"><link rel="alternate" type="application/rss+xml" title="${esc(cfg.title)} RSS" href="/rss.xml"><title>${esc(title)} — ${esc(cfg.title)}</title><script>
+  return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><link rel="icon" href="${SITE_ICON}"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(cfg.desc)}"><link rel="alternate" type="application/rss+xml" title="${esc(cfg.title)} RSS" href="/rss.xml"><title>${esc(title)} — ${esc(cfg.title)}</title><script>
 (function(){
   var saved=localStorage.getItem('theme');
   var systemDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;

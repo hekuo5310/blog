@@ -5,14 +5,14 @@ const {build}=require('esbuild');
 const {webcrypto}=require('node:crypto');
 const fs=require('node:fs'),vm=require('node:vm');
 const {JSDOM}=require('jsdom');
-let app;
+let app;const upstreamCalls=[];
 before(async()=>{
   const b=await build({entryPoints:['src/index.ts'],bundle:true,platform:'node',format:'cjs',write:false,loader:{'.txt':'text'}}),module={exports:{}};
-  vm.runInNewContext(b.outputFiles[0].text,{module,exports:module.exports,require,Request,Response,Headers,URL,URLSearchParams,TextEncoder,TextDecoder,ReadableStream,Uint8Array,crypto:webcrypto,console});app=module.exports.default;
+  vm.runInNewContext(b.outputFiles[0].text,{module,exports:module.exports,require,Request,Response,Headers,URL,URLSearchParams,TextEncoder,TextDecoder,ReadableStream,Uint8Array,AbortController,setTimeout,clearTimeout,fetch:async(url,options)=>{upstreamCalls.push({url,options});return new Response('not found',{status:404})},crypto:webcrypto,console});app=module.exports.default;
 });
 function fixture(){
   const db=new DatabaseSync(':memory:');for(const p of fs.readdirSync('migrations').filter(x=>x.endsWith('.sql')).sort())db.exec(fs.readFileSync('migrations/'+p,'utf8'));
-  const legacy='**友链拯救世界！**\n\n- [Old](https://old.test/)', env={SESSIONS:{async get(k){return k==='a'.repeat(64)?'1':null}},DB:{prepare(sql){let args=[];const s={bind(...v){args=v;return s},async all(){return {results:db.prepare(sql).all(...args)}},async first(){return db.prepare(sql).get(...args)||null},async run(){const r=db.prepare(sql).run(...args);return {meta:{changes:Number(r.changes),last_row_id:Number(r.lastInsertRowid)}}}};return s}}};
+  const legacy='**友链拯救世界！**\n\n- [Old](https://old.example/)', env={SESSIONS:{async get(k){return k==='a'.repeat(64)?'1':null}},DB:{prepare(sql){let args=[];const s={bind(...v){args=v;return s},async all(){return {results:db.prepare(sql).all(...args)}},async first(){return db.prepare(sql).get(...args)||null},async run(){const r=db.prepare(sql).run(...args);return {meta:{changes:Number(r.changes),last_row_id:Number(r.lastInsertRowid)}}}};return s}}};
   db.prepare('INSERT INTO pages(title,slug,body,published) VALUES (?,?,?,1)').run('友链','friend-link',legacy);
   const send=(path,{method='GET',data,admin=true,origin='https://blog.test',headers={}}={})=>app.fetch(new Request('https://blog.test'+path,{method,headers:{DNT:'1',Origin:origin,...(admin?{Cookie:'__Host-session='+'a'.repeat(64)}:{}),...(data!==undefined?{'Content-Type':'application/x-www-form-urlencoded'}:{}),...headers},...(data!==undefined?{body:typeof data==='string'?data:new URLSearchParams(data)}:{})}),env,{waitUntil(){}});
   const stamp=async()=>{const dom=new JSDOM(await (await send('/admin/friend-links/new')).text());const value=dom.window.document.querySelector('[name=revision]').value;dom.window.close();return value};
@@ -20,6 +20,13 @@ function fixture(){
   return {db,send,stamp,stored,legacy};
 }
 const fields={name:'New friend',url:'https://new.test/path',avatar:'',description:'A small blog',order:'0'};
+test('public icon lookup only fetches configured published entries without forwarding visitor credentials',async()=>{
+  const f=fixture();upstreamCalls.length=0;
+  assert.equal((await f.send('/api/friend-icon/missing?site=https://attacker.example/')).status,404);assert.equal(upstreamCalls.length,0);
+  const r=await f.send('/api/friend-icon/legacy-0?site=https://attacker.example/');assert.equal(r.status,302);assert.equal(r.headers.get('Location'),'https://old.example/favicon.ico');assert.equal(upstreamCalls.length,1);
+  assert.equal(upstreamCalls[0].url,'https://old.example/');assert.equal(upstreamCalls[0].options.headers.Cookie,undefined);assert.equal(upstreamCalls[0].options.headers.Authorization,undefined);
+  f.db.prepare('UPDATE pages SET published=0').run();assert.equal((await f.send('/api/friend-icon/legacy-0')).status,404);
+});
 test('normal forms migrate legacy links on save, then edit, order, delete and render publicly',async()=>{
   const f=fixture(),base='/admin/friend-links';
   const initial=await (await f.send(base)).text();assert.match(initial,/Old/);assert.match(initial,/新增友链/);assert.equal(f.stored(),f.legacy);
@@ -30,7 +37,7 @@ test('normal forms migrate legacy links on save, then edit, order, delete and re
   assert.match(await (await f.send(`${base}/${entry.id}/edit`)).text(),/头像地址/);
   r=await f.send(`${base}/${entry.id}`,{method:'POST',data:{...fields,name:'Changed',avatar:'https://img.test/avatar.png',order:'1',revision:await f.stamp()}});assert.equal(r.status,303);
   saved=JSON.parse(f.stored());assert.equal(saved.entries[1].name,'Changed');assert.equal(saved.entries[1].avatar,'https://img.test/avatar.png');
-  const publicHtml=await (await f.send('/p/friend-link',{admin:false})).text();assert.match(publicHtml,/Changed/);assert.match(publicHtml,/https:\/\/old.test\/favicon.ico/);assert.match(publicHtml,/https:\/\/img.test\/avatar.png/);
+  const publicHtml=await (await f.send('/p/friend-link',{admin:false})).text();assert.match(publicHtml,/Changed/);assert.match(publicHtml,/\/api\/friend-icon\/legacy-0/);assert.match(publicHtml,/https:\/\/img.test\/avatar.png/);
   r=await f.send(`${base}/${entry.id}/delete`,{method:'POST',data:{revision:await f.stamp()}});assert.equal(r.status,303);assert.equal(JSON.parse(f.stored()).entries.length,1);
 });
 test('session/CSRF protection, validation, stale forms and byte limits protect friend management',async()=>{

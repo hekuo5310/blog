@@ -45,17 +45,18 @@ test('client renders prose, falls back on missing icons and copies actual site s
   let copied;Object.defineProperty(w.navigator,'clipboard',{configurable:true,value:{async writeText(value){copied=value}}});
   w.eval(fs.readFileSync('src/friend-links-client.js.txt','utf8'));
   assert.equal(w.document.querySelector('.friends-intro strong').textContent,'友链拯救世界！');
-  const image=w.document.querySelector('.friend-icon img');image.dispatchEvent(new w.Event('error'));assert.equal(image.hidden,true);
+  const image=w.document.querySelector('.friend-icon img');image.dispatchEvent(new w.Event('error'));image.dispatchEvent(new w.Event('error'));assert.equal(image.hidden,true);
   const button=w.document.querySelector('[data-friend-copy]');assert.equal(button.hidden,false);button.click();await new Promise(r=>setImmediate(r));
-  assert.equal(copied,'名称：我的博客\n简介：记录生活与代码\n网址：https://www.io.hk.cn/');
+  assert.equal(copied,'名称：我的博客\n简介：记录生活与代码\n网址：https://www.io.hk.cn/\n图标：https://weavatar.com/avatar/a41cf00f35de0918d7bba5e50e399acb');
+  assert.equal(w.document.querySelector('head link[rel=icon]').href,'https://weavatar.com/avatar/a41cf00f35de0918d7bba5e50e399acb');
   assert.match(w.document.querySelector('[data-friend-copy-status]').textContent,/已复制/);
   w.navigator.clipboard.writeText=async()=>{throw Error('denied')};button.click();await new Promise(r=>setImmediate(r));assert.match(w.document.querySelector('[data-friend-copy-status]').textContent,/手动复制/);dom.window.close();
 });
 test('structured entries preserve order and avatar uses site favicon after a load failure',()=>{
   const document={type:'friend-links',version:1,intro:'Hello',entries:[{id:'first',name:'A',url:'https://a.test/path',avatar:'https://images.test/a.png',description:'A blog',order:2},{id:'second',name:'B',url:'https://b.test/',avatar:'',description:'',order:1}]};
-  const parsed=links.parseFriendLinks(JSON.stringify(document));assert.equal(parsed.friends[0].name,'B');assert.equal(parsed.friends[0].icon,'https://b.test/favicon.ico');assert.equal(parsed.prose,'Hello');
+  const parsed=links.parseFriendLinks(JSON.stringify(document));assert.equal(parsed.friends[0].name,'B');assert.match(parsed.friends[0].icon,/^\/api\/friend-icon\/second/);assert.equal(parsed.prose,'Hello');
   const dom=new JSDOM(html.pageDetail({...page,body:JSON.stringify(document)},cfg),{url:'https://blog.test/p/friend-link',runScripts:'outside-only'}),w=dom.window;
   w.eval(fs.readFileSync('src/friend-links-client.js.txt','utf8'));
-  const image=w.document.querySelector('a[href="https://a.test/path"] img');image.dispatchEvent(new w.Event('error'));assert.equal(image.src,'https://a.test/favicon.ico');
-  image.dispatchEvent(new w.Event('error'));assert.equal(image.hidden,true);dom.window.close();
+  const image=w.document.querySelector('a[href="https://a.test/path"] img');image.dispatchEvent(new w.Event('error'));assert.match(image.src,/\/api\/friend-icon\/first/);
+  image.dispatchEvent(new w.Event('error'));assert.equal(image.src,'https://a.test/favicon.ico');image.dispatchEvent(new w.Event('error'));assert.equal(image.hidden,true);dom.window.close();
 });

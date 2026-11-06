@@ -1,6 +1,7 @@
 import { todoGiscusRoutes } from './todo-giscus'
 import { todoRoutes } from './todos'
 import { friendAdminRoutes } from './friend-links-admin'
+import { friendIconRoutes } from './friend-icons'
 import { publicChatGPTStats, updateChatGPTStats } from './chatgpt-stats'
 import { offlineArchive, offlineVersion, offlineAsset } from './offline/archive'
 import { Hono } from 'hono'
@@ -145,6 +146,7 @@ app.use('/admin/*', async (c, next) => {
 app.route('/', todoGiscusRoutes())
 app.route('/', todoRoutes(getConfig))
 app.route('/', friendAdminRoutes())
+app.route('/', friendIconRoutes())
 
 // public
 app.post('/api/chatgpt-stats/update', updateChatGPTStats)

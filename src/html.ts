@@ -1,4 +1,5 @@
 import { CHATGPT_STATS_CSS, chatgptStatsCard } from './chatgpt-stats-view'
+import { friendLinksContent, FRIEND_LINKS_SCRIPT } from './friend-links'
 import { ARTICLE_LICENSES, CUSTOM_ARTICLE_LICENSE, DEFAULT_ARTICLE_LICENSE, articleLicenseDisplayName, getArticleLicense } from './licenses'
 import { currentUtc8Year, databaseUtcToIso, formatUtc8Date, formatUtc8DateTime } from './time'
 import type { StatItem, StatsReport } from './analytics'
@@ -1300,6 +1301,9 @@ export function adminPageDashboard(pages: PageItem[]): string {
 }
 
 export function pageDetail(page: PageItem, cfg: SiteConfig = DEFAULT_CONFIG): string {
+  if (page.slug === 'friend-link') {
+    return layout(page.title, friendLinksContent(page.title,page.body,cfg) + `<script src="/offline/marked.js"></script><script src="/offline/purify.js"></script>${MARKDOWN_SCRIPT}${FRIEND_LINKS_SCRIPT}`, false, undefined, cfg)
+  }
   const body = `<div class="wrap article-wrap"><div class="article-layout"><div class="article">
 <h1>${esc(page.title)}</h1>
 <div class="article-body" id="post-body"></div>

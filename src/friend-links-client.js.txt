@@ -1,0 +1,27 @@
+(function () {
+  document.querySelectorAll('[data-friend-markdown]').forEach(function (element) {
+    if (window.renderMarkdown) element.innerHTML = window.renderMarkdown(element.textContent || '');
+  });
+  document.querySelectorAll('.friend-icon img').forEach(function (image) {
+    function fallback() { image.hidden = true; }
+    image.addEventListener('error',fallback);
+    if (image.complete && !image.naturalWidth) fallback();
+  });
+  var link = document.querySelector('[data-friend-site-url]');
+  if (link) { link.href = location.origin + '/'; link.textContent = link.href; }
+  var button = document.querySelector('[data-friend-copy]'), status = document.querySelector('[data-friend-copy-status]');
+  if (!button || !status || !link) return;
+  button.hidden = false;
+  button.addEventListener('click', async function () {
+    var name = document.querySelector('[data-friend-site-name]').textContent;
+    var description = document.querySelector('[data-friend-site-description]').textContent;
+    var text = '名称：' + name + '\n简介：' + description + '\n网址：' + link.href;
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) throw Error('clipboard');
+      await navigator.clipboard.writeText(text);
+      status.textContent = '本站信息已复制';
+    } catch (_) {
+      status.textContent = '无法自动复制，请选中上方本站信息手动复制。';
+    }
+  });
+})();

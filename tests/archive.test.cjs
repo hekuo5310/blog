@@ -44,6 +44,13 @@ test('deployment and public content edits change the version', async () => {
   const deploy = await (await api.offlineVersion(context('deployment-two').c)).json(); assert.notEqual(one.version, deploy.version);
   const edit = await (await api.offlineVersion(context('deployment-one', 'Updated text').c)).json(); assert.notEqual(one.version, edit.version);
 });
+test('friend-link cards and inline interaction are included in the offline archive',async()=>{
+  const {c}=context(),prepare=c.env.DB.prepare;
+  c.env.DB.prepare=sql=>/FROM pages/.test(sql)?{async all(){return {results:[{id:1,slug:'friend-link',title:'友链',body:'- [Friend](https://friend.test)',published:1,created_at:'2026-11-06 00:00:00'}]}}}:prepare(sql);
+  const response=await api.offlineArchive(c);assert.equal(response.status,200);
+  const pack=JSON.parse(gunzipSync(Buffer.from(await response.arrayBuffer()))),page=pack.entries.find(e=>e.path==='/p/friend-link');
+  assert.match(page.body,/class="friend-card"/);assert.match(page.body,/data-friend-copy/);assert.match(page.body,/window.renderMarkdown/);
+});
 test('oversized Base64 representation is rejected before image bytes are read', async () => {
   const { c } = context(); let read = false;
   c.env.IMAGES.get = async () => ({ size: 30 * 1024 * 1024, httpMetadata: { contentType: 'image/png' }, async arrayBuffer() { read = true; throw Error('must not read'); } });

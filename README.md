@@ -409,6 +409,10 @@ Invoke-RestMethod -Uri 'https://blog.hekuo.workers.dev/api/chatgpt-stats'
 离线整站包包含 `/chatgpt-stats` 的页面外壳；统计 API 始终通过网络读取，断网时页面显示离线提示。
 
 
+## 友链页面
+
+`/p/friend-link` 使用博客原生配色、6px 圆角和响应式卡片展示友链，并提供本站名称、简介及网址的复制按钮。沿用后台「页面」中的 Markdown 内容，现有 `- [站名](https://example.com/)` 列表会自动成为卡片；可写成 `- [![头像](https://example.com/avatar.png) 站名](https://example.com/) — 简介` 添加头像和说明。未设置头像时尝试加载该站的 favicon，加载失败显示站名首字；复杂列表仍按 Markdown 展示。本站信息跟随站点设置与当前访问域名，离线包也包含卡片布局。
+
 ## 待办清单与讨论
 
 管理员登录后，在前台待办详情中可直接点击 Markdown 任务复选框，双向切换 `- [ ]` 与 `- [x]` 并立即保存。访客只读；保存失败会回滚勾选，正文发生并发编辑时会提示刷新，避免覆盖新内容。旧的 `/admin/todos` 列表入口跳转到 `/todos`。

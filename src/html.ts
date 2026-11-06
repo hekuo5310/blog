@@ -347,7 +347,7 @@ export function layout(title: string, body: string, adminNav = false, _loggedInU
   const themeToggle = `<button class="nav-icon theme-toggle" type="button" id="theme-toggle" aria-label="切换夜间模式" aria-pressed="false" title="切换夜间模式"><span class="theme-icon moon" aria-hidden="true"></span></button>`
   const updateJson = JSON.stringify(updates)
   const rightNav = adminNav
-    ? `<div class="nav-links"><a href="/admin">管理</a><a href="/admin/post/new">新建</a><a href="/todos">待办</a><a href="/admin/settings">设置</a>${themeToggle}<form method="post" action="/admin/logout" style="display:inline"><button class="nav-icon">退出</button></form></div>`
+    ? `<div class="nav-links"><a href="/admin">管理</a><a href="/admin/post/new">新建</a><a href="/todos">待办</a><a href="/admin/friend-links">友链</a><a href="/admin/settings">设置</a>${themeToggle}<form method="post" action="/admin/logout" style="display:inline"><button class="nav-icon">退出</button></form></div>`
     : `<div class="nav-links">${extraLinks}<a class="nav-report" href="/todos">待办</a><a class="nav-report" href="/search">搜索</a><a class="nav-report" href="/tags">标签</a><a class="nav-report" href="/archive">归档</a><a class="nav-report" href="/stats">访问报表</a><a class="nav-report" href="/chatgpt-stats">Token 统计</a>${subscribeToggle}<button type="button" class="nav-icon" id="offline-toggle" aria-pressed="false">启用离线模式</button>${themeToggle}</div>`
   return `<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(cfg.desc)}"><link rel="alternate" type="application/rss+xml" title="${esc(cfg.title)} RSS" href="/rss.xml"><title>${esc(title)} — ${esc(cfg.title)}</title><script>
 (function(){
@@ -1284,7 +1284,7 @@ export function adminPageDashboard(pages: PageItem[]): string {
 <td><a href="/p/${esc(p.slug)}" style="color:#888;font-size:.82rem">/${p.slug}</a></td>
 <td><span class="badge ${p.published ? 'pub' : ''}">${p.published ? '已发布' : '草稿'}</span></td>
 <td class="actions">
-  <a href="/admin/page/${p.id}/edit"><button class="btn btn-sm btn-ghost">编辑</button></a>
+  <a href="${p.slug==='friend-link'?'/admin/friend-links':`/admin/page/${p.id}/edit`}"><button class="btn btn-sm btn-ghost">${p.slug==='friend-link'?'管理友链':'编辑'}</button></a>
   <form method="post" action="/admin/page/${p.id}/publish" style="display:inline"><button class="btn btn-sm btn-ghost">${p.published ? '取消' : '发布'}</button></form>
   <form method="post" action="/admin/page/${p.id}/delete" style="display:inline" onsubmit="return confirm('确认删除？')"><button class="btn btn-sm btn-danger">删除</button></form>
 </td></tr>`).join('')

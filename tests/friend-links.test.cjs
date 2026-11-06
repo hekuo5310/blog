@@ -51,3 +51,11 @@ test('client renders prose, falls back on missing icons and copies actual site s
   assert.match(w.document.querySelector('[data-friend-copy-status]').textContent,/已复制/);
   w.navigator.clipboard.writeText=async()=>{throw Error('denied')};button.click();await new Promise(r=>setImmediate(r));assert.match(w.document.querySelector('[data-friend-copy-status]').textContent,/手动复制/);dom.window.close();
 });
+test('structured entries preserve order and avatar uses site favicon after a load failure',()=>{
+  const document={type:'friend-links',version:1,intro:'Hello',entries:[{id:'first',name:'A',url:'https://a.test/path',avatar:'https://images.test/a.png',description:'A blog',order:2},{id:'second',name:'B',url:'https://b.test/',avatar:'',description:'',order:1}]};
+  const parsed=links.parseFriendLinks(JSON.stringify(document));assert.equal(parsed.friends[0].name,'B');assert.equal(parsed.friends[0].icon,'https://b.test/favicon.ico');assert.equal(parsed.prose,'Hello');
+  const dom=new JSDOM(html.pageDetail({...page,body:JSON.stringify(document)},cfg),{url:'https://blog.test/p/friend-link',runScripts:'outside-only'}),w=dom.window;
+  w.eval(fs.readFileSync('src/friend-links-client.js.txt','utf8'));
+  const image=w.document.querySelector('a[href="https://a.test/path"] img');image.dispatchEvent(new w.Event('error'));assert.equal(image.src,'https://a.test/favicon.ico');
+  image.dispatchEvent(new w.Event('error'));assert.equal(image.hidden,true);dom.window.close();
+});

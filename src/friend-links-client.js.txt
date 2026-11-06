@@ -3,7 +3,12 @@
     if (window.renderMarkdown) element.innerHTML = window.renderMarkdown(element.textContent || '');
   });
   document.querySelectorAll('.friend-icon img').forEach(function (image) {
-    function fallback() { image.hidden = true; }
+    var favicon = new URL('/favicon.ico', image.closest('a').href).href;
+    var triedIcon = image.src === favicon;
+    function fallback() {
+      if (!triedIcon) { triedIcon = true; image.src = favicon; return; }
+      image.hidden = true;
+    }
     image.addEventListener('error',fallback);
     if (image.complete && !image.naturalWidth) fallback();
   });

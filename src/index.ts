@@ -1,5 +1,6 @@
 import { todoGiscusRoutes } from './todo-giscus'
 import { todoRoutes } from './todos'
+import { friendAdminRoutes } from './friend-links-admin'
 import { publicChatGPTStats, updateChatGPTStats } from './chatgpt-stats'
 import { offlineArchive, offlineVersion, offlineAsset } from './offline/archive'
 import { Hono } from 'hono'
@@ -143,6 +144,7 @@ app.use('/admin/*', async (c, next) => {
 
 app.route('/', todoGiscusRoutes())
 app.route('/', todoRoutes(getConfig))
+app.route('/', friendAdminRoutes())
 
 // public
 app.post('/api/chatgpt-stats/update', updateChatGPTStats)
@@ -403,6 +405,7 @@ app.post('/admin/page', async (c) => {
 app.get('/admin/page/:id/edit', async (c) => {
   const page = await getPageById(c, Number(c.req.param('id')))
   if (!page) return c.notFound()
+  if (page.slug==='friend-link') return c.redirect('/admin/friend-links')
   return c.html(pageForm(page))
 })
 
@@ -410,6 +413,7 @@ app.post('/admin/page/:id', async (c) => {
   const id = Number(c.req.param('id'))
   const existing = await getPageById(c, id)
   if (!existing) return c.notFound()
+  if (existing.slug==='friend-link') return c.redirect('/admin/friend-links',303)
   const form = await c.req.formData()
   const title = (form.get('title') as string ?? '').trim()
   const slug = (form.get('slug') as string ?? '').trim().replace(/[^a-z0-9-]/gi, '-').toLowerCase()

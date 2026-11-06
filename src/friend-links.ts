@@ -2,13 +2,37 @@ import { marked, type Token, type Tokens } from 'marked'
 import type { SiteConfig } from './html'
 import client from './friend-links-client.js.txt'
 
-type Friend = { name: string; url: string; host: string; icon: string; description: string }
+type Friend = { name: string; url: string; host: string; icon: string; avatar: string; description: string }
+export type FriendEntry = { id: string; name: string; url: string; avatar: string; description: string; order: number }
+export type FriendDocument = { type: 'friend-links'; version: 1; intro: string; entries: FriendEntry[] }
 const escape = (value: string) => value.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]!)
 function webUrl(raw: string): URL | null {
   try {
     const url = new URL(raw)
     return /^https?:$/.test(url.protocol) && !url.username && !url.password ? url : null
   } catch { return null }
+}
+export function friendFields(values: {name:string;url:string;avatar:string;description:string;order:string}) {
+  const name=values.name.trim(), url=webUrl(values.url.trim()), avatar=values.avatar.trim(), description=values.description.trim()
+  if (!name || name.length>160 || !url || values.url.length>2048 || description.length>1000 || avatar.length>2048 || (avatar && !webUrl(avatar) && !/^\/images\/[A-Za-z0-9._%-]+$/.test(avatar)) || !/^\d{1,6}$/.test(values.order)) return null
+  return {name,url:url.href,avatar,description,order:Number(values.order)}
+}
+export function friendDocument(body: string): FriendDocument {
+  try {
+    const value=JSON.parse(body)
+    if (value.type==='friend-links' && value.version===1 && typeof value.intro==='string' && Array.isArray(value.entries)) {
+      const entries: FriendEntry[]=[]
+      for (const row of value.entries) {
+        if (!row || !['name','url','avatar','description','id'].every(key=>typeof row[key]==='string') || !/^[a-zA-Z0-9-]{1,64}$/.test(row.id)) throw Error('Invalid friend')
+        const fields=friendFields({...row,order:String(row.order)})
+        if (!fields || entries.some(entry=>entry.id===row.id)) throw Error('Invalid friend')
+        entries.push({id:row.id,...fields})
+      }
+      return {type:'friend-links',version:1,intro:value.intro,entries}
+    }
+  } catch {}
+  const legacy=parseFriendLinks(body,true)
+  return {type:'friend-links',version:1,intro:legacy.prose,entries:legacy.friends.map((row,index)=>({id:'legacy-'+index,name:row.name,url:row.url,avatar:row.avatar,description:row.description,order:index}))}
 }
 function plain(tokens: Token[]): string {
   return tokens.map(token => {
@@ -26,12 +50,17 @@ function friend(item: Tokens.ListItem): Friend | null {
   if (!url) return null
   const name = plain(link.tokens).trim() || url.hostname
   const image = [...tokens.slice(0,index),...link.tokens].find(token => token.type === 'image') as Tokens.Image | undefined
-  const icon = image && (webUrl(image.href) || /^\/images\/[A-Za-z0-9._%-]+$/.test(image.href)) ? image.href : new URL('/favicon.ico',url).href
-  return { name, url:url.href, host:url.hostname, icon, description:plain(tokens.slice(index+1)).replace(/^\s*[—–:：-]\s*/, '').trim() }
+  const avatar = image && (webUrl(image.href) || /^\/images\/[A-Za-z0-9._%-]+$/.test(image.href)) ? image.href : ''
+  const icon = avatar || new URL('/favicon.ico',url).href
+  return { name, url:url.href, host:url.hostname, icon, avatar, description:plain(tokens.slice(index+1)).replace(/^\s*[—–:：-]\s*/, '').trim() }
 }
 
-/** Existing Markdown remains the source of truth; only simple friend lists become cards. */
-export function parseFriendLinks(body: string) {
+/** Render managed entries and read legacy Markdown without changing stored content. */
+export function parseFriendLinks(body: string, legacyOnly = false): { friends: Friend[]; prose: string } {
+  if (!legacyOnly) {
+    const data=friendDocument(body)
+    return {friends:[...data.entries].sort((a,b)=>a.order-b.order).map(row=>({...row,host:new URL(row.url).hostname,icon:row.avatar || new URL('/favicon.ico',row.url).href})),prose:data.intro}
+  }
   const friends: Friend[] = [], prose: string[] = []
   for (const token of marked.lexer(body)) {
     if (token.type === 'list' && !token.ordered) {

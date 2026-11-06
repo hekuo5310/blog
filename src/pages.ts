@@ -45,6 +45,12 @@ export async function updatePage(c: Context<{ Bindings: Env }>, id: number, titl
   return unique
 }
 
+/** Keep edits from another administrator tab rather than overwriting them. */
+export async function savePageBody(c: Context<{ Bindings: Env }>, page: Page, body: string) {
+  const result=await c.env.DB.prepare('UPDATE pages SET body=? WHERE id=? AND body=?').bind(body,page.id,page.body).run()
+  return !!result.meta.changes
+}
+
 export async function deletePage(c: Context<{ Bindings: Env }>, id: number) {
   await c.env.DB.prepare('DELETE FROM pages WHERE id=?').bind(id).run()
 }
@@ -80,7 +86,7 @@ export async function autosavePage(c: Context<{ Bindings: Env }>, id: number | n
   if (id !== null) {
     const existing = await getPageById(c, id)
     if (!existing) return { status: 'missing' }
-    if (existing.published) return { status: 'declined' }
+    if (existing.published || existing.slug === 'friend-link') return { status: 'declined' }
     await c.env.DB.prepare('UPDATE pages SET title=?, body=? WHERE id=?')
       .bind(cleanTitle || existing.title, cleanBody, id).run()
     return { status: 'saved', id }
